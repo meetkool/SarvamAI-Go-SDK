@@ -322,6 +322,7 @@ type SpeechDuplex struct {
 	limit        int
 	onFirst      func()
 	started      time.Time
+	OnSentence   func(string)
 
 	tokenMu  sync.Mutex
 	tokens   strings.Builder
@@ -376,6 +377,9 @@ func (d *SpeechDuplex) SendToken(ctx context.Context, token string) error {
 
 	if !hasSpeakableText(ready) {
 		return nil
+	}
+	if d.OnSentence != nil {
+		d.OnSentence(ready)
 	}
 	if err := d.SendText(ctx, ready); err != nil {
 		return err
