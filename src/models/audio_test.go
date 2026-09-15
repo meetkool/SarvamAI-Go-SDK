@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
 )
 
 func testWAV(sampleRate int, d time.Duration) []byte {

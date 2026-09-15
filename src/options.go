@@ -1,7 +1,7 @@
 package sarvam
 
 import (
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 	"log/slog"
 	"net/http"
 	"os"

@@ -3,7 +3,7 @@ package sarvam
 import (
 	"context"
 	"encoding/json"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 	"io"
 	"net/http"
 	"net/http/httptest"

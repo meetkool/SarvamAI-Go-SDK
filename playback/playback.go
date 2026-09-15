@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crynta/sarvam-go-sdk/internal/wav"
-	sarvam "github.com/crynta/sarvam-go-sdk/src"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
+	sarvam "github.com/meetkool/SarvamAI-Go-SDK/src"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 	"github.com/ebitengine/oto/v3"
 	mp3 "github.com/hajimehoshi/go-mp3"
 )

@@ -3,7 +3,7 @@ package sarvam
 import (
 	"context"
 	"errors"
-	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
 	"net/http"
 	"net/http/httptest"
 	"strings"

@@ -1,4 +1,4 @@
-module github.com/crynta/sarvam-go-sdk
+module github.com/meetkool/SarvamAI-Go-SDK
 
 go 1.25.0
 

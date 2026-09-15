@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 var ErrNoCapture = errors.New("mic: capture needs cgo (install a C compiler and build with CGO_ENABLED=1)")

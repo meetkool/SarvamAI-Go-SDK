@@ -9,9 +9,9 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/crynta/sarvam-go-sdk/mic"
-	sarvam "github.com/crynta/sarvam-go-sdk/src"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/mic"
+	sarvam "github.com/meetkool/SarvamAI-Go-SDK/src"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 func main() {

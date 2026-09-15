@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/crynta/sarvam-go-sdk/playback"
-	sarvam "github.com/crynta/sarvam-go-sdk/src"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/playback"
+	sarvam "github.com/meetkool/SarvamAI-Go-SDK/src"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 func main() {

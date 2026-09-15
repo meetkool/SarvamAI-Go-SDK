@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/crynta/sarvam-go-sdk/internal/wav"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 const streamChunkSize = 16 << 10

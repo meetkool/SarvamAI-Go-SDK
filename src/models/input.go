@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
 )
 
 type Input interface {

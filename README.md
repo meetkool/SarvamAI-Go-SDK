@@ -26,7 +26,7 @@ A Go SDK for the [Sarvam AI](https://www.sarvam.ai) audio APIs: text to speech, 
 ## Installation
 
 ```bash
-go get github.com/crynta/sarvam-go-sdk
+go get github.com/meetkool/SarvamAI-Go-SDK
 ```
 
 ## Quick Start
@@ -39,8 +39,8 @@ import (
 	"fmt"
 	"log"
 
-	sarvam "github.com/crynta/sarvam-go-sdk/src"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	sarvam "github.com/meetkool/SarvamAI-Go-SDK/src"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 func main() {
@@ -289,7 +289,7 @@ audio.WriteTo(w)   // io.WriterTo
 These live apart, so the core SDK never pulls in an audio library.
 
 ```go
-import "github.com/crynta/sarvam-go-sdk/playback"
+import "github.com/meetkool/SarvamAI-Go-SDK/playback"
 
 playback.Play(ctx, audio) // WAV, PCM16 or MP3
 
@@ -299,7 +299,7 @@ speaker.Clear() // drop what is queued when the user interrupts
 ```
 
 ```go
-import "github.com/crynta/sarvam-go-sdk/mic"
+import "github.com/meetkool/SarvamAI-Go-SDK/mic"
 
 microphone, err := mic.Open(16000, 0) // mono PCM16 frames of 100ms
 defer microphone.Close()

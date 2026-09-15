@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/crynta/sarvam-go-sdk/internal/multipart"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/internal/multipart"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 type Client struct {

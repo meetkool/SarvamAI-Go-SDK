@@ -13,7 +13,7 @@ import (
 
 	"bytes"
 	"github.com/coder/websocket"
-	"github.com/crynta/sarvam-go-sdk/src/models"
+	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
 
 func wsTestClient(t *testing.T, handler func(*websocket.Conn)) *Client {
