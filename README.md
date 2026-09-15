@@ -440,3 +440,7 @@ go test ./...
 ```
 
 The tests run offline against local servers, so they need no API key.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
