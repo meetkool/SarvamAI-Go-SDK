@@ -261,3 +261,69 @@ func TestJoinAudio(t *testing.T) {
 		t.Fatalf("joined mp3 = %v", raw)
 	}
 }
+
+func TestSpeechDuplexSkipsUnspeakableText(t *testing.T) {
+	sent := make(chan string, 8)
+	done := make(chan struct{})
+
+	client := wsTestClient(t, func(conn *websocket.Conn) {
+		ctx := context.Background()
+		conn.Read(ctx)
+
+		for {
+			_, payload, err := conn.Read(ctx)
+			if err != nil {
+				return
+			}
+			var msg struct {
+				Type string `json:"type"`
+				Data struct {
+					Text string `json:"text"`
+				} `json:"data"`
+			}
+			json.Unmarshal(payload, &msg)
+
+			switch msg.Type {
+			case "text":
+				sent <- msg.Data.Text
+			case "flush":
+				close(done)
+				return
+			}
+		}
+	})
+
+	ctx := context.Background()
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer duplex.Close()
+
+	for _, text := range []string{"", " ", "\n", "!", "।", "...", " ?! "} {
+		if err := duplex.SendText(ctx, text); err != nil {
+			t.Fatalf("SendText(%q) = %v", text, err)
+		}
+	}
+	if err := duplex.SendText(ctx, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	duplex.Flush(ctx)
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the server never saw the flush")
+	}
+	close(sent)
+
+	var got []string
+	for text := range sent {
+		got = append(got, text)
+	}
+	if len(got) != 1 || got[0] != "hello" {
+		t.Fatalf("server received %q, want only [hello]: text with no letters makes the real API close the socket", got)
+	}
+}

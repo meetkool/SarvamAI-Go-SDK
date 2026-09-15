@@ -216,6 +216,10 @@ return duplex.Err()
 
 `SendText` from one goroutine while another runs `Next` is safe: writes are serialized inside.
 
+Text with no letters in it — a stray newline, or a lone `!` arriving as its own
+token — is skipped instead of sent. The API rejects such messages and closes the
+whole connection, which would otherwise end the reply mid-sentence.
+
 ## Transcription
 
 ```go

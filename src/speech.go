@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"sync/atomic"
+	"unicode"
 
 	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
 	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
@@ -315,7 +316,7 @@ type SpeechDuplex struct {
 func (d *SpeechDuplex) Format() models.Format { return d.format }
 
 func (d *SpeechDuplex) SendText(ctx context.Context, text string) error {
-	if text == "" {
+	if !hasSpeakableText(text) {
 		return nil
 	}
 	return d.ws.writeJSON(ctx, ttsClientMessage{
@@ -438,4 +439,13 @@ func (d *SpeechDuplex) All() iter.Seq2[models.AudioChunk, error] {
 			yield(models.AudioChunk{}, err)
 		}
 	}
+}
+
+func hasSpeakableText(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
 }
