@@ -26,6 +26,8 @@ type Client struct {
 
 	Batch *BatchService
 
+	Chat *ChatService
+
 	apiKey        string
 	baseURL       string
 	userAgent     string
@@ -84,6 +86,7 @@ func New(opts ...Option) (*Client, error) {
 	c.Speech = &SpeechService{client: c}
 	c.Transcription = &TranscriptionService{client: c}
 	c.Batch = &BatchService{client: c}
+	c.Chat = &ChatService{client: c}
 	return c, nil
 }
 

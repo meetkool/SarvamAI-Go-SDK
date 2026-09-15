@@ -4,6 +4,7 @@ A Go SDK for the [Sarvam AI](https://www.sarvam.ai) audio APIs: text to speech, 
 
 ## Features
 
+- **Chat** — Sarvam-105B, one-shot or streamed token by token, with tool calling
 - **Text to speech** — 30+ voices across 11 Indian languages
 - **Streaming speech** — audio arrives piece by piece, so playback starts early
 - **Two-way speech** — push text in as an LLM writes it, get audio straight back
@@ -82,6 +83,59 @@ Or pass the key in:
 ```go
 client, err := sarvam.New(sarvam.WithAPIKey("your-api-key"))
 ```
+
+## Chat
+
+The brain, if you are building an agent — Sarvam's own LLM.
+
+```go
+resp, err := client.Chat.Create(ctx, &models.ChatRequest{
+	Model: models.ChatSarvam105B,
+	Messages: []models.Message{
+		models.SystemMessage("You are helpful. Answer in one short sentence."),
+		models.UserMessage("Bharat me sabse lambi nadi kaunsi hai?"),
+	},
+	Temperature: models.Float(0.5),
+})
+
+fmt.Println(resp.Content())
+fmt.Println(resp.Usage.TotalTokens)
+```
+
+Token by token, which is what you feed into `Speech.Duplex` for a voice agent:
+
+```go
+stream, err := client.Chat.Stream(ctx, &models.ChatRequest{...})
+defer stream.Close()
+
+for stream.Next() {
+	fmt.Print(stream.Chunk().Content())
+}
+return stream.Err()
+```
+
+Tool calling works the usual way:
+
+```go
+Tools: []models.Tool{
+	models.FunctionTool("get_weather", "current weather", schema),
+}
+
+if resp.HasToolCalls() {
+	call := resp.ToolCalls()[0]
+	var args WeatherArgs
+	call.Function.ParseArguments(&args)
+}
+```
+
+**Thinking is on by default.** Those tokens are billed as output and they arrive before any answer, which is seconds of silence in a voice agent. Turn it off and use the conversational model when latency matters:
+
+```go
+Model:           models.ChatSarvam105BConversations,
+ReasoningEffort: models.ReasoningOff,
+```
+
+When it is on, read it with `resp.Reasoning()` or `chunk.Reasoning()`.
 
 ## Text to Speech
 
@@ -391,10 +445,13 @@ sarvam-go-sdk/
 │   ├── errors.go          sentinels and typed errors
 │   ├── retry.go           backoff
 │   ├── ws.go              WebSocket connection
+│   ├── stream.go          Server-Sent Events reader
+│   ├── chat.go            ChatService: Create, Stream
 │   ├── speech.go          SpeechService: Create, Stream, Duplex
 │   ├── transcription.go   TranscriptionService: Create, Stream
 │   ├── batch.go           BatchService: Create, Get, Wait, Results
 │   └── models/
+│       ├── chat.go           messages, tools, chat request and response
 │       ├── speech.go         SpeechRequest, AudioChunk
 │       ├── transcription.go  TranscriptionRequest, results, live events
 │       ├── batch.go          BatchRequest, Job, JobState
@@ -421,6 +478,8 @@ sarvam-go-sdk/
 ## Examples
 
 ```bash
+go run ./examples/chat_simple
+go run ./examples/chat_streaming
 go run ./examples/tts_simple
 go run ./examples/tts_streaming
 go run ./examples/tts_duplex
