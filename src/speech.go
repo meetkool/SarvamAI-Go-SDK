@@ -331,7 +331,7 @@ type SpeechDuplex struct {
 
 	spokenMu sync.Mutex
 	spoken   strings.Builder
-	closed   bool
+	closed   atomic.Bool
 	done     bool
 }
 
@@ -407,6 +407,10 @@ func (d *SpeechDuplex) drainTokens(ctx context.Context) error {
 }
 
 func (d *SpeechDuplex) Flush(ctx context.Context) error {
+	return d.flush(ctx, false)
+}
+
+func (d *SpeechDuplex) flush(ctx context.Context, final bool) error {
 	d.tokenMu.Lock()
 	spoken := d.queued.String()
 	d.queued.Reset()
@@ -416,6 +420,9 @@ func (d *SpeechDuplex) Flush(ctx context.Context) error {
 	d.tokenMu.Unlock()
 
 	d.pendingFlush.Add(1)
+	if final {
+		d.sendClosed.Store(true)
+	}
 	if err := d.ws.writeJSON(ctx, ttsClientMessage{Type: "flush"}); err != nil {
 		d.pendingFlush.Add(-1)
 		return err
@@ -427,8 +434,7 @@ func (d *SpeechDuplex) CloseSend(ctx context.Context) error {
 	if err := d.drainTokens(ctx); err != nil {
 		return err
 	}
-	d.sendClosed.Store(true)
-	return d.Flush(ctx)
+	return d.flush(ctx, true)
 }
 
 func (d *SpeechDuplex) SpokenText() string {
@@ -453,7 +459,7 @@ func (d *SpeechDuplex) confirmSpoken() {
 }
 
 func (d *SpeechDuplex) Next() bool {
-	if d.closed || d.done {
+	if d.closed.Load() || d.done {
 		return false
 	}
 	for {
@@ -540,12 +546,14 @@ func (d *SpeechDuplex) Chunk() models.AudioChunk { return d.chunk }
 func (d *SpeechDuplex) Err() error { return d.err }
 
 func (d *SpeechDuplex) Close() error {
-	if d.closed {
+	if d.closed.Swap(true) {
 		return nil
 	}
-	d.closed = true
 	return d.ws.close()
 }
+
+// IsClosed reports whether the connection has ended and must be replaced.
+func (d *SpeechDuplex) IsClosed() bool { return d.closed.Load() }
 
 func (d *SpeechDuplex) All() iter.Seq2[models.AudioChunk, error] {
 	return func(yield func(models.AudioChunk, error) bool) {
@@ -605,6 +613,11 @@ func sentenceCut(s string, limit int) int {
 }
 
 func (d *SpeechDuplex) Reset() {
+	// Reset only prepares a healthy connection for another turn. It cannot
+	// reopen a dead socket, and must preserve its diagnostic error.
+	if d.closed.Load() {
+		return
+	}
 	d.sendClosed.Store(false)
 	d.pendingFlush.Store(0)
 	d.done = false

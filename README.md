@@ -491,9 +491,12 @@ Typed errors, each wrapping its sentinel: `*APIError` (`StatusCode`, `Code`, `Me
 
 Network errors, 429 and 5xx (except 501) are retried with growing delays, and a `Retry-After` header is honoured. Running out of credits is not retried, because waiting will not refill them.
 
-## What Sarvam Does Not Offer
+## SDK Scope
 
-Sarvam has no API for voice cloning (it is done in their dashboard), listing voices, voice changing, sound effects, audio isolation, or realtime voice agents, so this SDK does not pretend to. Speakers are chosen by name from the Bulbul voice list.
+This SDK exposes the model services implemented in `src/`. The browser voice
+assistant example combines transcription, chat, and speech into a conversation;
+its HTML interface and turn handling live in `examples/voice_agent`. Speakers
+are chosen by name from the Bulbul voice list.
 
 ## Project Structure
 
@@ -545,6 +548,11 @@ sarvam-go-sdk/
 
 ## Examples
 
+For a complete browser voice assistant with an included HTML interface, live
+captions, streamed speech, and interruptions, see
+[`examples/voice_agent`](examples/voice_agent/README.md). Add your API key and
+run it locally; no frontend build is needed.
+
 ```bash
 go run ./examples/chat_simple
 go run ./examples/chat_streaming
@@ -556,6 +564,7 @@ go run ./examples/transcribe_realtime
 go run ./examples/batch_diarize interview.wav
 go run ./examples/play_speech
 go run ./examples/error_handling
+go run ./examples/voice_agent -addr :8137
 ```
 
 ## Development

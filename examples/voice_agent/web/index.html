@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sarvam Voice Agent</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    background: #0e1116; color: #e6edf3;
+    font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  header { padding: 28px 16px 10px; text-align: center; }
+  h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  .sub { color: #8b949e; font-size: 13px; margin-top: 4px; }
+  #status { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: #8b949e; }
+  #dot { width: 9px; height: 9px; border-radius: 50%; background: #484f58; transition: background .2s; }
+  #dot.listening { background: #3fb950; box-shadow: 0 0 10px #3fb95066; }
+  #dot.thinking  { background: #d29922; box-shadow: 0 0 10px #d2992266; }
+  #dot.speaking  { background: #58a6ff; box-shadow: 0 0 10px #58a6ff66; }
+  main { width: 100%; max-width: 640px; flex: 1; padding: 16px; display: flex; flex-direction: column; }
+  #log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .line { max-width: 85%; padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .you { align-self: flex-end; background: #1f6feb; color: #fff; border-bottom-right-radius: 4px; }
+  .bot { align-self: flex-start; background: #161b22; border: 1px solid #30363d; border-bottom-left-radius: 4px; }
+  .live { opacity: .55; font-style: italic; }
+  .err { align-self: center; color: #f85149; font-size: 13px; text-align: center; }
+  .lang { font-size: 11px; opacity: .65; margin-left: 6px; }
+  footer { padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  button {
+    border: 0; border-radius: 999px; padding: 15px 34px; font-size: 15px; font-weight: 600;
+    background: #238636; color: #fff; cursor: pointer; transition: background .15s, transform .1s;
+  }
+  button:hover { background: #2ea043; }
+  button:active { transform: scale(.97); }
+  button.on { background: #da3633; }
+  button:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; }
+  .hint { color: #6e7681; font-size: 12px; text-align: center; max-width: 420px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Sarvam Voice Agent</h1>
+    <div class="sub">speak in any of 11 Indian languages, it replies in the same one</div>
+    <div id="status"><span id="dot"></span><span id="state">not connected</span></div>
+  </header>
+
+  <main><div id="log"></div></main>
+
+  <footer>
+    <button id="talk">Start talking</button>
+    <div class="hint">Use headphones for a cleaner interrupt. Speak while it is talking and it stops.</div>
+  </footer>
+
+<script>
+const dot = document.getElementById("dot");
+const stateText = document.getElementById("state");
+const log = document.getElementById("log");
+const talk = document.getElementById("talk");
+
+const JITTER = 0.2;
+const AMBIENCE_GAIN = 0.015;
+
+let ws = null, micCtx = null, playCtx = null, media = null;
+let running = false, playHead = 0, sources = [], partialLine = null, botLine = null;
+let ambience = null;
+
+function setState(name, label) {
+  dot.className = name || "";
+  stateText.textContent = label || name || "idle";
+}
+
+function addLine(cls, text) {
+  const el = document.createElement("div");
+  el.className = "line " + cls;
+  el.textContent = text;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+function playPCM(buffer) {
+  if (playCtx && playCtx.state === "suspended") playCtx.resume().catch(() => {});
+  const pcm = new Int16Array(buffer);
+  if (!pcm.length || !playCtx) return;
+
+  const audio = playCtx.createBuffer(1, pcm.length, 24000);
+  const channel = audio.getChannelData(0);
+  for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
+
+  const node = playCtx.createBufferSource();
+  node.buffer = audio;
+  node.connect(playCtx.destination);
+
+  const now = playCtx.currentTime;
+  if (playHead < now) playHead = now + JITTER;
+  node.start(playHead);
+  playHead += audio.duration;
+
+  sources.push(node);
+  node.onended = () => { sources = sources.filter(s => s !== node); };
+}
+
+function flushAudio() {
+  for (const s of sources) { try { s.stop(); } catch (e) {} }
+  sources = [];
+  playHead = 0;
+}
+
+// brown noise, with the tail wrapped over the head so looping it has no seam
+function noiseBuffer(ctx, seconds) {
+  const fade = Math.floor(ctx.sampleRate * 0.25);
+  const frames = Math.floor(ctx.sampleRate * seconds);
+  const raw = new Float32Array(frames + fade);
+
+  let last = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.02 * white) / 1.02;
+    raw[i] = last * 3.5;
+  }
+  for (let i = 0; i < fade; i++) {
+    const t = i / fade;
+    raw[i] = raw[i] * t + raw[frames + i] * (1 - t);
+  }
+
+  const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+  buffer.getChannelData(0).set(raw.subarray(0, frames));
+  return buffer;
+}
+
+// a room tone that runs for the whole session, so a pause never sounds dead
+function buildAmbience(ctx) {
+  const source = ctx.createBufferSource();
+  source.buffer = noiseBuffer(ctx, 4);
+  source.loop = true;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 420;
+  filter.Q.value = 0.4;
+
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  gain.gain.linearRampToValueAtTime(AMBIENCE_GAIN, ctx.currentTime + 1.2);
+
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+  source.start();
+
+  return { ctx, source, filter, gain };
+}
+
+function startAmbience() {
+  if (ambience || !playCtx) return;
+  ambience = buildAmbience(playCtx);
+}
+
+function stopAmbience() {
+  if (!ambience) return;
+  const bed = ambience;
+  ambience = null;
+  try {
+    bed.gain.gain.cancelScheduledValues(bed.ctx.currentTime);
+    bed.gain.gain.setValueAtTime(bed.gain.gain.value, bed.ctx.currentTime);
+    bed.gain.gain.linearRampToValueAtTime(0, bed.ctx.currentTime + 0.25);
+    bed.source.stop(bed.ctx.currentTime + 0.3);
+  } catch (e) {}
+  setTimeout(() => {
+    try { bed.source.disconnect(); bed.filter.disconnect(); bed.gain.disconnect(); } catch (e) {}
+  }, 400);
+}
+
+function workletURL() {
+  const code = `
+    class PCM extends AudioWorkletProcessor {
+      process(inputs) {
+        const input = inputs[0][0];
+        if (input) {
+          const out = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i]));
+            out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          }
+          this.port.postMessage(out.buffer, [out.buffer]);
+        }
+        return true;
+      }
+    }
+    registerProcessor("pcm", PCM);
+  `;
+  return URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+}
+
+function handle(msg) {
+  if (msg.type === "partial") {
+    if (!partialLine) partialLine = addLine("you live", "");
+    partialLine.textContent = msg.text;
+    log.scrollTop = log.scrollHeight;
+  } else if (msg.type === "final") {
+    if (partialLine) partialLine.remove();
+    partialLine = null;
+    const line = addLine("you", msg.text);
+    if (msg.language) {
+      const tag = document.createElement("span");
+      tag.className = "lang";
+      tag.textContent = msg.language;
+      line.appendChild(tag);
+    }
+    botLine = null;
+  } else if (msg.type === "reply") {
+    if (!botLine) botLine = addLine("bot", "");
+    botLine.textContent += msg.text;
+    log.scrollTop = log.scrollHeight;
+  } else if (msg.type === "interrupt") {
+    flushAudio();
+  } else if (msg.type === "state") {
+    setState(msg.state, msg.state);
+  } else if (msg.type === "error") {
+    addLine("err", msg.text);
+  }
+}
+
+async function start() {
+  talk.disabled = true;
+  try {
+    media = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+    });
+  } catch (e) {
+    addLine("err", "microphone blocked: " + e.message);
+    talk.disabled = false;
+    return;
+  }
+
+  micCtx = new AudioContext({ sampleRate: 16000 });
+  playCtx = new AudioContext({ sampleRate: 24000 });
+  await Promise.all([micCtx.resume(), playCtx.resume()]);
+  const moduleURL = workletURL();
+  try { await micCtx.audioWorklet.addModule(moduleURL); }
+  finally { URL.revokeObjectURL(moduleURL); }
+  startAmbience();
+
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(scheme + "://" + location.host + "/ws");
+  ws.binaryType = "arraybuffer";
+
+  ws.onmessage = (e) => {
+    if (typeof e.data === "string") handle(JSON.parse(e.data));
+    else playPCM(e.data);
+  };
+  ws.onerror = () => addLine("err", "connection failed");
+  ws.onclose = () => { if (running) stop(); setState("", "disconnected"); };
+
+  ws.onopen = () => {
+    const source = micCtx.createMediaStreamSource(media);
+    const node = new AudioWorkletNode(micCtx, "pcm");
+    const mute = micCtx.createGain();
+    mute.gain.value = 0;
+
+    let pending = [], pendingLength = 0;
+    node.port.onmessage = (e) => {
+      const chunk = new Int16Array(e.data);
+      pending.push(chunk);
+      pendingLength += chunk.length;
+      if (pendingLength < 1600) return;
+
+      const frame = new Int16Array(pendingLength);
+      let offset = 0;
+      for (const part of pending) { frame.set(part, offset); offset += part.length; }
+      pending = [];
+      pendingLength = 0;
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(frame.buffer);
+    };
+
+    source.connect(node);
+    node.connect(mute);
+    mute.connect(micCtx.destination);
+
+    running = true;
+    talk.disabled = false;
+    talk.textContent = "Stop";
+    talk.classList.add("on");
+    setState("listening", "listening");
+  };
+}
+
+function stop() {
+  running = false;
+  flushAudio();
+  stopAmbience();
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  if (media) { media.getTracks().forEach(t => t.stop()); media = null; }
+  if (micCtx) { micCtx.close(); micCtx = null; }
+  if (playCtx) { playCtx.close(); playCtx = null; }
+  talk.textContent = "Start talking";
+  talk.classList.remove("on");
+  talk.disabled = false;
+  setState("", "stopped");
+}
+
+talk.onclick = () => (running ? stop() : start());
+</script>
+</body>
+</html>

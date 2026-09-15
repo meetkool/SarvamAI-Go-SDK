@@ -1,0 +1,6 @@
+.env
+certs/
+*.pem
+*.key
+voice-agent
+*.exe

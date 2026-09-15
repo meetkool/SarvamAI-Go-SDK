@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -465,5 +466,21 @@ func TestDuplexResetReusesTheConnection(t *testing.T) {
 		if got := duplex.SpokenText(); got != line {
 			t.Fatalf("SpokenText = %q, want %q", got, line)
 		}
+	}
+}
+
+func TestResetDoesNotReviveClosedSpeech(t *testing.T) {
+	client := ttsEchoServer(t, nil)
+	d, err := client.Speech.Duplex(context.Background(), &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Close()
+	d.err = io.ErrUnexpectedEOF
+	d.Reset()
+	if !d.IsClosed() || d.Next() || d.Err() != io.ErrUnexpectedEOF {
+		t.Fatal("Reset must preserve a dead connection and its error")
 	}
 }
