@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func TestTranscriptionCreate(t *testing.T) {
@@ -25,13 +26,13 @@ func TestTranscriptionCreate(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if got := r.FormValue("model"); got != string(STTSaarasV4) {
+		if got := r.FormValue("model"); got != string(models.STTSaarasV4) {
 			t.Errorf("model = %q", got)
 		}
 		if got := r.FormValue("with_timestamps"); got != "true" {
 			t.Errorf("with_timestamps = %q", got)
 		}
-		if got := r.FormValue("language_code"); got != string(LangHindi) {
+		if got := r.FormValue("language_code"); got != string(models.LangHindi) {
 			t.Errorf("language_code = %q", got)
 		}
 
@@ -66,10 +67,10 @@ func TestTranscriptionCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := client.Transcription.Create(context.Background(), &TranscriptionRequest{
-		Model:      STTSaarasV4,
-		Audio:      FileInput(path),
-		Language:   LangHindi,
+	result, err := client.Transcription.Create(context.Background(), &models.TranscriptionRequest{
+		Model:      models.STTSaarasV4,
+		Audio:      models.FileInput(path),
+		Language:   models.LangHindi,
 		Timestamps: true,
 	})
 	if err != nil {
@@ -79,8 +80,8 @@ func TestTranscriptionCreate(t *testing.T) {
 	if result.Text != "hello world" {
 		t.Errorf("Text = %q", result.Text)
 	}
-	if result.Language != LangEnglish {
-		t.Errorf("Language = %q", result.Language)
+	if result.Language != models.LangEnglish {
+		t.Errorf("models.Language = %q", result.Language)
 	}
 	if len(result.Words) != 2 {
 		t.Fatalf("Words = %d, want 2", len(result.Words))
@@ -101,8 +102,8 @@ func TestTranscriptionRejectsLongAudioBeforeUploading(t *testing.T) {
 		t.Error("a clip over the limit must not be uploaded")
 	})
 
-	_, err := client.Transcription.Create(context.Background(), &TranscriptionRequest{
-		Audio: BytesInput(testWAV(16000, 45*time.Second), WAV(16000)),
+	_, err := client.Transcription.Create(context.Background(), &models.TranscriptionRequest{
+		Audio: models.BytesInput(testWAV(16000, 45*time.Second), models.WAV(16000)),
 	})
 
 	var tooLong *AudioTooLongError
@@ -156,7 +157,7 @@ func TestRealtimeStreamEvents(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	stream, err := client.Transcription.Stream(ctx, &TranscriptionStreamRequest{InputFormat: PCM16(16000)})
+	stream, err := client.Transcription.Stream(ctx, &models.TranscriptionStreamRequest{InputFormat: models.PCM16(16000)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,18 +177,18 @@ func TestRealtimeStreamEvents(t *testing.T) {
 			t.Fatal(err)
 		}
 		switch e := event.(type) {
-		case *SessionStarted:
+		case *models.SessionStarted:
 			got = append(got, "start:"+e.RequestID)
-		case *SpeechStarted:
+		case *models.SpeechStarted:
 			got = append(got, "speech")
-		case *PartialTranscript:
+		case *models.PartialTranscript:
 			got = append(got, "partial:"+e.Text)
-		case *FinalTranscript:
+		case *models.FinalTranscript:
 			got = append(got, "final:"+e.Text)
 			if e.End != 1500*time.Millisecond {
 				t.Errorf("final ends at %v, want 1.5s", e.End)
 			}
-		case *SessionEnded:
+		case *models.SessionEnded:
 			got = append(got, "end")
 			if e.AudioDuration != 3500*time.Millisecond {
 				t.Errorf("billed %v, want 3.5s", e.AudioDuration)
@@ -207,8 +208,8 @@ func TestRealtimeStreamChecksTheFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = client.Transcription.Stream(context.Background(), &TranscriptionStreamRequest{
-		InputFormat: MP3(44100, 128),
+	_, err = client.Transcription.Stream(context.Background(), &models.TranscriptionStreamRequest{
+		InputFormat: models.MP3(44100, 128),
 	})
 
 	var formatErr *FormatError

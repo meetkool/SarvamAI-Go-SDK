@@ -3,6 +3,7 @@ package sarvam
 import (
 	"context"
 	"encoding/json"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -108,9 +109,9 @@ func TestBatchFlow(t *testing.T) {
 	ctx := context.Background()
 	audio := testWAV(16000, time.Second)
 
-	job, err := client.Batch.Create(ctx, &BatchRequest{
-		Files:       []Input{BytesInput(audio, WAV(16000))},
-		Model:       STTSaarasV4,
+	job, err := client.Batch.Create(ctx, &models.BatchRequest{
+		Files:       []models.Input{models.BytesInput(audio, models.WAV(16000))},
+		Model:       models.STTSaarasV4,
 		Diarize:     true,
 		NumSpeakers: 2,
 		Timestamps:  true,
@@ -132,7 +133,7 @@ func TestBatchFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job.State != JobCompleted {
+	if job.State != models.JobCompleted {
 		t.Fatalf("state = %q, want Completed", job.State)
 	}
 	if statusHits.Load() < 2 {
@@ -160,21 +161,21 @@ func TestBatchChecksItsLimits(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if _, err := client.Batch.Create(ctx, &BatchRequest{}); err == nil {
+	if _, err := client.Batch.Create(ctx, &models.BatchRequest{}); err == nil {
 		t.Error("a job with no files should be refused")
 	}
 
-	many := make([]Input, batchMaxFiles+1)
+	many := make([]models.Input, batchMaxFiles+1)
 	for i := range many {
-		many[i] = BytesInput([]byte("x"), WAV(16000))
+		many[i] = models.BytesInput([]byte("x"), models.WAV(16000))
 	}
-	if _, err := client.Batch.Create(ctx, &BatchRequest{Files: many}); err == nil {
+	if _, err := client.Batch.Create(ctx, &models.BatchRequest{Files: many}); err == nil {
 		t.Errorf("more than %d files should be refused", batchMaxFiles)
 	}
 }
 
 func TestUniqueNameAvoidsClashes(t *testing.T) {
-	taken := map[string]Input{"clip.wav": nil, "clip-2.wav": nil}
+	taken := map[string]models.Input{"clip.wav": nil, "clip-2.wav": nil}
 	if got := uniqueName("clip.wav", taken); got != "clip-3.wav" {
 		t.Fatalf("uniqueName = %q, want clip-3.wav", got)
 	}

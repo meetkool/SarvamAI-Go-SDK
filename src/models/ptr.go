@@ -1,4 +1,4 @@
-package sarvam
+package models
 
 func Float(v float64) *float64 { return &v }
 func Int(v int) *int           { return &v }

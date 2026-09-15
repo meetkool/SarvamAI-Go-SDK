@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 var ErrNoCapture = errors.New("mic: capture needs cgo (install a C compiler and build with CGO_ENABLED=1)")
@@ -47,7 +47,7 @@ func Open(sampleRate int, frame time.Duration) (*Mic, error) {
 
 func (m *Mic) Frames() <-chan []byte { return m.frames }
 
-func (m *Mic) Format() sarvam.Format { return sarvam.PCM16(m.rate) }
+func (m *Mic) Format() models.Format { return models.PCM16(m.rate) }
 
 func (m *Mic) Close() error {
 	m.once.Do(func() {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 	"io"
 	"net/http"
 	"strconv"
@@ -170,9 +171,9 @@ func (e *AudioTooLongError) Error() string {
 func (e *AudioTooLongError) Unwrap() error { return ErrAudioTooLong }
 
 type FormatError struct {
-	Format    Format
+	Format    models.Format
 	Endpoint  string
-	Supported []Format
+	Supported []models.Format
 }
 
 func (e *FormatError) Error() string {

@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"log"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -15,10 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, err = client.Speech.Create(context.Background(), &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	_, err = client.Speech.Create(context.Background(), &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangHindi,
+		Language: models.LangHindi,
 		Text:     "Namaste!",
 	})
 

@@ -9,8 +9,9 @@ import (
 	"os"
 	"os/signal"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
 	"github.com/crynta/sarvam-go-sdk/mic"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -31,10 +32,10 @@ func main() {
 	}
 	defer microphone.Close()
 
-	stream, err := client.Transcription.Stream(ctx, &sarvam.TranscriptionStreamRequest{
-		Model:       sarvam.STTSaarasV3Realtime,
+	stream, err := client.Transcription.Stream(ctx, &models.TranscriptionStreamRequest{
+		Model:       models.STTSaarasV3Realtime,
 		InputFormat: microphone.Format(),
-		StreamType:  sarvam.StreamFast,
+		StreamType:  models.StreamFast,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -61,13 +62,13 @@ func main() {
 		}
 
 		switch e := event.(type) {
-		case *sarvam.PartialTranscript:
+		case *models.PartialTranscript:
 			fmt.Printf("\r%s", e.Text)
-		case *sarvam.FinalTranscript:
+		case *models.FinalTranscript:
 			fmt.Printf("\r%s\n", e.Text)
-		case *sarvam.SpeechStarted:
+		case *models.SpeechStarted:
 
-		case *sarvam.SessionEnded:
+		case *models.SessionEnded:
 			fmt.Printf("billed %.1fs of audio\n", e.AudioDuration.Seconds())
 			return
 		}

@@ -7,7 +7,8 @@ import (
 	"os"
 	"time"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -22,9 +23,9 @@ func main() {
 	}
 	ctx := context.Background()
 
-	job, err := client.Batch.Create(ctx, &sarvam.BatchRequest{
-		Files:      []sarvam.Input{sarvam.FileInput(path)},
-		Model:      sarvam.STTSaarasV4,
+	job, err := client.Batch.Create(ctx, &models.BatchRequest{
+		Files:      []models.Input{models.FileInput(path)},
+		Model:      models.STTSaarasV4,
 		Diarize:    true,
 		Timestamps: true,
 	})

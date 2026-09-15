@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -13,13 +14,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	a, err := c.Speech.Create(context.Background(), &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	a, err := c.Speech.Create(context.Background(), &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangHindi,
+		Language: models.LangHindi,
 		Text:     "Namaste! Yah Sarvam Go SDK ka test hai.",
-		Format:   sarvam.WAV(24000),
-		Speed:    sarvam.Float(1.05),
+		Format:   models.WAV(24000),
+		Speed:    models.Float(1.05),
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -1,6 +1,7 @@
 package sarvam
 
 import (
+	"github.com/crynta/sarvam-go-sdk/src/models"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,7 +30,7 @@ type config struct {
 	maxRetries     int
 	retryBaseDelay time.Duration
 	retryMaxDelay  time.Duration
-	defaultFormat  Format
+	defaultFormat  models.Format
 	maxConcurrency int
 	userAgent      string
 	httpClient     *http.Client
@@ -45,7 +46,7 @@ func defaultConfig() config {
 		maxRetries:     DefaultMaxRetries,
 		retryBaseDelay: time.Second,
 		retryMaxDelay:  60 * time.Second,
-		defaultFormat:  WAV(24000),
+		defaultFormat:  models.WAV(24000),
 		maxConcurrency: DefaultMaxConcurrency,
 	}
 }
@@ -91,7 +92,7 @@ func WithRetryDelays(base, maxDelay time.Duration) Option {
 	}
 }
 
-func WithDefaultFormat(f Format) Option {
+func WithDefaultFormat(f models.Format) Option {
 	return func(c *config) { c.defaultFormat = f }
 }
 

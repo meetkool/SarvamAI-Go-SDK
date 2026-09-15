@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
 	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func TestMonoToStereo(t *testing.T) {
@@ -35,7 +36,7 @@ func TestDecodeWAVToStereo(t *testing.T) {
 	const samples = 16000
 	data := append(wav.Header(16000, 1, 16, samples*2), make([]byte, samples*2)...)
 
-	pcm, rate, err := decode(sarvam.NewAudio(data, sarvam.WAV(16000)))
+	pcm, rate, err := decode(models.NewAudio(data, models.WAV(16000)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func TestDecodeWAVToStereo(t *testing.T) {
 }
 
 func TestDecodeRawPCM16(t *testing.T) {
-	pcm, rate, err := decode(sarvam.NewAudio([]byte{1, 2, 3, 4}, sarvam.PCM16(24000)))
+	pcm, rate, err := decode(models.NewAudio([]byte{1, 2, 3, 4}, models.PCM16(24000)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestDecodeRawPCM16(t *testing.T) {
 }
 
 func TestDecodeRejectsOtherCodecs(t *testing.T) {
-	_, _, err := decode(sarvam.NewAudio([]byte("data"), sarvam.FLAC(24000)))
+	_, _, err := decode(models.NewAudio([]byte("data"), models.FLAC(24000)))
 	if !errors.Is(err, sarvam.ErrUnsupportedFormat) {
 		t.Fatalf("got %v, want ErrUnsupportedFormat", err)
 	}

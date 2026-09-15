@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
 	"github.com/crynta/sarvam-go-sdk/playback"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -16,12 +17,12 @@ func main() {
 	}
 	ctx := context.Background()
 
-	audio, err := client.Speech.Create(ctx, &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	audio, err := client.Speech.Create(ctx, &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangEnglish,
+		Language: models.LangEnglish,
 		Text:     "This clip is playing straight from the SDK.",
-		Format:   sarvam.WAV(24000),
+		Format:   models.WAV(24000),
 	})
 	if err != nil {
 		log.Fatal(err)

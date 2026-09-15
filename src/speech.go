@@ -13,55 +13,38 @@ import (
 	"sync/atomic"
 
 	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 const streamChunkSize = 16 << 10
 
 type SpeechService struct{ client *Client }
 
-type SpeechRequest struct {
-	Model    Model
-	Voice    string
-	Text     string
-	Language Language
-	Format   Format
-
-	Speed       *float64
-	Pitch       *float64
-	Loudness    *float64
-	Temperature *float64
-	Preprocess  *bool
-	Dictionary  string
-
-	MinBufferSize  int
-	MaxChunkLength int
-}
-
 type speechBody struct {
-	Text                string   `json:"text"`
-	LanguageCode        Language `json:"language_code"`
-	Speaker             string   `json:"speaker,omitempty"`
-	Model               Model    `json:"model,omitempty"`
-	Pace                *float64 `json:"pace,omitempty"`
-	Pitch               *float64 `json:"pitch,omitempty"`
-	Loudness            *float64 `json:"loudness,omitempty"`
-	Temperature         *float64 `json:"temperature,omitempty"`
-	EnablePreprocessing *bool    `json:"enable_preprocessing,omitempty"`
-	SpeechSampleRate    int      `json:"speech_sample_rate,omitempty"`
-	OutputAudioCodec    Codec    `json:"output_audio_codec,omitempty"`
-	OutputAudioBitrate  string   `json:"output_audio_bitrate,omitempty"`
-	DictID              string   `json:"dict_id,omitempty"`
+	Text                string          `json:"text"`
+	LanguageCode        models.Language `json:"language_code"`
+	Speaker             string          `json:"speaker,omitempty"`
+	Model               models.Model    `json:"model,omitempty"`
+	Pace                *float64        `json:"pace,omitempty"`
+	Pitch               *float64        `json:"pitch,omitempty"`
+	Loudness            *float64        `json:"loudness,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
+	EnablePreprocessing *bool           `json:"enable_preprocessing,omitempty"`
+	SpeechSampleRate    int             `json:"speech_sample_rate,omitempty"`
+	OutputAudioCodec    models.Codec    `json:"output_audio_codec,omitempty"`
+	OutputAudioBitrate  string          `json:"output_audio_bitrate,omitempty"`
+	DictID              string          `json:"dict_id,omitempty"`
 }
 
-func (s *SpeechService) newBody(req *SpeechRequest, withBitrate bool) (*speechBody, Format, error) {
+func (s *SpeechService) newBody(req *models.SpeechRequest, withBitrate bool) (*speechBody, models.Format, error) {
 	if req == nil {
-		return nil, Format{}, invalidRequest("request is nil")
+		return nil, models.Format{}, invalidRequest("request is nil")
 	}
 	if req.Text == "" {
-		return nil, Format{}, invalidRequest("Text is required")
+		return nil, models.Format{}, invalidRequest("Text is required")
 	}
 	if req.Language == "" {
-		return nil, Format{}, invalidRequest("Language is required, e.g. sarvam.LangHindi")
+		return nil, models.Format{}, invalidRequest("models.Language is required, e.g. sarvam.LangHindi")
 	}
 
 	format := s.client.format(req.Format)
@@ -80,12 +63,12 @@ func (s *SpeechService) newBody(req *SpeechRequest, withBitrate bool) (*speechBo
 		DictID:              req.Dictionary,
 	}
 	if withBitrate {
-		body.OutputAudioBitrate = format.bitrateParam()
+		body.OutputAudioBitrate = format.BitrateParam()
 	}
 	return body, format, nil
 }
 
-func (s *SpeechService) Create(ctx context.Context, req *SpeechRequest) (*Audio, error) {
+func (s *SpeechService) Create(ctx context.Context, req *models.SpeechRequest) (*models.Audio, error) {
 	body, format, err := s.newBody(req, false)
 	if err != nil {
 		return nil, err
@@ -114,14 +97,14 @@ func (s *SpeechService) Create(ctx context.Context, req *SpeechRequest) (*Audio,
 	if err != nil {
 		return nil, err
 	}
-	return newAudio(data, format), nil
+	return models.NewAudio(data, format), nil
 }
 
-func joinAudio(parts [][]byte, f Format) ([]byte, error) {
+func joinAudio(parts [][]byte, f models.Format) ([]byte, error) {
 	if len(parts) == 1 {
 		return parts[0], nil
 	}
-	if f.Codec == CodecWAV {
+	if f.Codec == models.CodecWAV {
 		data, err := wav.Join(parts)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrDecode, err)
@@ -135,7 +118,7 @@ func joinAudio(parts [][]byte, f Format) ([]byte, error) {
 	return out, nil
 }
 
-func (s *SpeechService) Stream(ctx context.Context, req *SpeechRequest) (*SpeechStream, error) {
+func (s *SpeechService) Stream(ctx context.Context, req *models.SpeechRequest) (*SpeechStream, error) {
 	body, format, err := s.newBody(req, true)
 	if err != nil {
 		return nil, err
@@ -147,22 +130,17 @@ func (s *SpeechService) Stream(ctx context.Context, req *SpeechRequest) (*Speech
 	return &SpeechStream{body: resp.Body, format: format}, nil
 }
 
-type AudioChunk struct {
-	Bytes []byte
-	Index int
-}
-
 type SpeechStream struct {
 	body    io.ReadCloser
-	format  Format
-	chunk   AudioChunk
+	format  models.Format
+	chunk   models.AudioChunk
 	index   int
 	err     error
 	pending error
 	closed  bool
 }
 
-func (s *SpeechStream) Format() Format { return s.format }
+func (s *SpeechStream) Format() models.Format { return s.format }
 
 func (s *SpeechStream) Next() bool {
 	if s.closed {
@@ -178,7 +156,7 @@ func (s *SpeechStream) Next() bool {
 		buf := make([]byte, streamChunkSize)
 		n, err := s.body.Read(buf)
 		if n > 0 {
-			s.chunk = AudioChunk{Bytes: buf[:n], Index: s.index}
+			s.chunk = models.AudioChunk{Bytes: buf[:n], Index: s.index}
 			s.index++
 			s.pending = err
 			return true
@@ -198,7 +176,7 @@ func (s *SpeechStream) finish(err error) {
 	s.Close()
 }
 
-func (s *SpeechStream) Chunk() AudioChunk { return s.chunk }
+func (s *SpeechStream) Chunk() models.AudioChunk { return s.chunk }
 
 func (s *SpeechStream) Err() error { return s.err }
 
@@ -210,15 +188,15 @@ func (s *SpeechStream) Close() error {
 	return s.body.Close()
 }
 
-func (s *SpeechStream) All() iter.Seq2[AudioChunk, error] {
-	return func(yield func(AudioChunk, error) bool) {
+func (s *SpeechStream) All() iter.Seq2[models.AudioChunk, error] {
+	return func(yield func(models.AudioChunk, error) bool) {
 		for s.Next() {
 			if !yield(s.Chunk(), nil) {
 				return
 			}
 		}
 		if err := s.Err(); err != nil {
-			yield(AudioChunk{}, err)
+			yield(models.AudioChunk{}, err)
 		}
 	}
 }
@@ -229,20 +207,20 @@ type ttsClientMessage struct {
 }
 
 type ttsConfig struct {
-	LanguageCode        Language `json:"language_code"`
-	Speaker             string   `json:"speaker"`
-	Model               Model    `json:"model,omitempty"`
-	Pace                *float64 `json:"pace,omitempty"`
-	Pitch               *float64 `json:"pitch,omitempty"`
-	Loudness            *float64 `json:"loudness,omitempty"`
-	Temperature         *float64 `json:"temperature,omitempty"`
-	EnablePreprocessing *bool    `json:"enable_preprocessing,omitempty"`
-	SpeechSampleRate    string   `json:"speech_sample_rate,omitempty"`
-	OutputAudioCodec    Codec    `json:"output_audio_codec,omitempty"`
-	OutputAudioBitrate  string   `json:"output_audio_bitrate,omitempty"`
-	DictID              string   `json:"dict_id,omitempty"`
-	MinBufferSize       int      `json:"min_buffer_size,omitempty"`
-	MaxChunkLength      int      `json:"max_chunk_length,omitempty"`
+	LanguageCode        models.Language `json:"language_code"`
+	Speaker             string          `json:"speaker"`
+	Model               models.Model    `json:"model,omitempty"`
+	Pace                *float64        `json:"pace,omitempty"`
+	Pitch               *float64        `json:"pitch,omitempty"`
+	Loudness            *float64        `json:"loudness,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
+	EnablePreprocessing *bool           `json:"enable_preprocessing,omitempty"`
+	SpeechSampleRate    string          `json:"speech_sample_rate,omitempty"`
+	OutputAudioCodec    models.Codec    `json:"output_audio_codec,omitempty"`
+	OutputAudioBitrate  string          `json:"output_audio_bitrate,omitempty"`
+	DictID              string          `json:"dict_id,omitempty"`
+	MinBufferSize       int             `json:"min_buffer_size,omitempty"`
+	MaxChunkLength      int             `json:"max_chunk_length,omitempty"`
 }
 
 type ttsServerMessage struct {
@@ -267,12 +245,12 @@ type ttsErrorData struct {
 	RequestID string          `json:"request_id"`
 }
 
-func (s *SpeechService) Duplex(ctx context.Context, req *SpeechRequest) (*SpeechDuplex, error) {
+func (s *SpeechService) Duplex(ctx context.Context, req *models.SpeechRequest) (*SpeechDuplex, error) {
 	if req == nil {
 		return nil, invalidRequest("request is nil")
 	}
 	if req.Language == "" {
-		return nil, invalidRequest("Language is required, e.g. sarvam.LangHindi")
+		return nil, invalidRequest("models.Language is required, e.g. sarvam.LangHindi")
 	}
 	if req.Voice == "" {
 		return nil, invalidRequest("Voice is required for a Duplex session")
@@ -299,7 +277,7 @@ func (s *SpeechService) Duplex(ctx context.Context, req *SpeechRequest) (*Speech
 		Temperature:         req.Temperature,
 		EnablePreprocessing: req.Preprocess,
 		OutputAudioCodec:    format.Codec,
-		OutputAudioBitrate:  format.bitrateParam(),
+		OutputAudioBitrate:  format.BitrateParam(),
 		DictID:              req.Dictionary,
 		MinBufferSize:       req.MinBufferSize,
 		MaxChunkLength:      req.MaxChunkLength,
@@ -325,16 +303,16 @@ func (s *SpeechService) Duplex(ctx context.Context, req *SpeechRequest) (*Speech
 type SpeechDuplex struct {
 	ws     *wsConn
 	ctx    context.Context
-	format Format
+	format models.Format
 
-	chunk      AudioChunk
+	chunk      models.AudioChunk
 	index      int
 	err        error
 	sendClosed atomic.Bool
 	closed     bool
 }
 
-func (d *SpeechDuplex) Format() Format { return d.format }
+func (d *SpeechDuplex) Format() models.Format { return d.format }
 
 func (d *SpeechDuplex) SendText(ctx context.Context, text string) error {
 	if text == "" {
@@ -392,7 +370,7 @@ func (d *SpeechDuplex) Next() bool {
 			if len(raw) == 0 {
 				continue
 			}
-			d.chunk = AudioChunk{Bytes: raw, Index: d.index}
+			d.chunk = models.AudioChunk{Bytes: raw, Index: d.index}
 			d.index++
 			return true
 
@@ -437,7 +415,7 @@ func ttsError(raw json.RawMessage) error {
 	return apiErr
 }
 
-func (d *SpeechDuplex) Chunk() AudioChunk { return d.chunk }
+func (d *SpeechDuplex) Chunk() models.AudioChunk { return d.chunk }
 
 func (d *SpeechDuplex) Err() error { return d.err }
 
@@ -449,15 +427,15 @@ func (d *SpeechDuplex) Close() error {
 	return d.ws.close()
 }
 
-func (d *SpeechDuplex) All() iter.Seq2[AudioChunk, error] {
-	return func(yield func(AudioChunk, error) bool) {
+func (d *SpeechDuplex) All() iter.Seq2[models.AudioChunk, error] {
+	return func(yield func(models.AudioChunk, error) bool) {
 		for d.Next() {
 			if !yield(d.Chunk(), nil) {
 				return
 			}
 		}
 		if err := d.Err(); err != nil {
-			yield(AudioChunk{}, err)
+			yield(models.AudioChunk{}, err)
 		}
 	}
 }

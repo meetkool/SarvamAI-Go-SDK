@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/crynta/sarvam-go-sdk/internal/multipart"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 type Client struct {
@@ -31,7 +32,7 @@ type Client struct {
 	http          *http.Client
 	timeout       time.Duration
 	retry         retryPolicy
-	defaultFormat Format
+	defaultFormat models.Format
 	slots         chan struct{}
 	log           *slog.Logger
 }
@@ -92,7 +93,7 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 
 func (c *Client) BaseURL() string { return c.baseURL }
 
-func (c *Client) format(f Format) Format {
+func (c *Client) format(f models.Format) models.Format {
 	if f.IsZero() {
 		return c.defaultFormat
 	}
@@ -123,22 +124,22 @@ func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) e
 	})
 }
 
-func (c *Client) doUpload(ctx context.Context, path string, fields []multipart.Field, in Input, out any) error {
+func (c *Client) doUpload(ctx context.Context, path string, fields []multipart.Field, in models.Input, out any) error {
 	policy := c.retry
-	if !in.replayable() {
+	if !in.Replayable() {
 		policy.maxRetries = 0
 	}
 
 	return withRetry(ctx, policy, func() error {
-		file, err := in.open()
+		file, err := in.Open()
 		if err != nil {
 			return err
 		}
 
 		body, contentType := multipart.Body(fields, multipart.File{
 			FieldName:   "file",
-			FileName:    in.filename(),
-			ContentType: in.contentType(),
+			FileName:    in.Filename(),
+			ContentType: in.ContentType(),
 			Body:        file,
 		})
 

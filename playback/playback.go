@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
 	"github.com/crynta/sarvam-go-sdk/internal/wav"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 	"github.com/ebitengine/oto/v3"
 	mp3 "github.com/hajimehoshi/go-mp3"
 )
@@ -45,7 +46,7 @@ func audioContext(sampleRate int) (*oto.Context, int, error) {
 	return device, deviceRate, nil
 }
 
-func Play(ctx context.Context, a *sarvam.Audio) error {
+func Play(ctx context.Context, a *models.Audio) error {
 	pcm, rate, err := decode(a)
 	if err != nil {
 		return err
@@ -73,9 +74,9 @@ func Play(ctx context.Context, a *sarvam.Audio) error {
 	return player.Err()
 }
 
-func decode(a *sarvam.Audio) ([]byte, int, error) {
+func decode(a *models.Audio) ([]byte, int, error) {
 	switch a.Format().Codec {
-	case sarvam.CodecWAV:
+	case models.CodecWAV:
 		info, err := wav.Parse(a.Bytes())
 		if err != nil {
 			return nil, 0, fmt.Errorf("playback: %w", err)
@@ -90,10 +91,10 @@ func decode(a *sarvam.Audio) ([]byte, int, error) {
 		}
 		return samples, info.SampleRate, nil
 
-	case sarvam.CodecPCM16:
+	case models.CodecPCM16:
 		return monoToStereo(a.Bytes()), a.SampleRate(), nil
 
-	case sarvam.CodecMP3:
+	case models.CodecMP3:
 		decoder, err := mp3.NewDecoder(bytes.NewReader(a.Bytes()))
 		if err != nil {
 			return nil, 0, fmt.Errorf("playback: decoding MP3: %w", err)

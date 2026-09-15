@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -16,11 +17,11 @@ func main() {
 	}
 	ctx := context.Background()
 
-	duplex, err := client.Speech.Duplex(ctx, &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangEnglish,
-		Format:   sarvam.MP3(24000, 128),
+		Language: models.LangEnglish,
+		Format:   models.MP3(24000, 128),
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -1,4 +1,4 @@
-package sarvam
+package models
 
 import "fmt"
 
@@ -90,7 +90,7 @@ func (f Format) extension() string {
 	return string(f.Codec)
 }
 
-func (f Format) bitrateParam() string {
+func (f Format) BitrateParam() string {
 	if f.Bitrate <= 0 {
 		return ""
 	}

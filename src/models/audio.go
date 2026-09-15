@@ -1,4 +1,4 @@
-package sarvam
+package models
 
 import (
 	"bytes"

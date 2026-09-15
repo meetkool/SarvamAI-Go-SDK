@@ -39,7 +39,8 @@ import (
 	"fmt"
 	"log"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -49,10 +50,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	audio, err := client.Speech.Create(context.Background(), &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	audio, err := client.Speech.Create(context.Background(), &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangHindi,
+		Language: models.LangHindi,
 		Text:     "Namaste, yah Sarvam Go SDK hai.",
 	})
 	if err != nil {
@@ -85,16 +86,16 @@ client, err := sarvam.New(sarvam.WithAPIKey("your-api-key"))
 ## Text to Speech
 
 ```go
-audio, err := client.Speech.Create(ctx, &sarvam.SpeechRequest{
-	Model:    sarvam.TTSBulbulV3,
+audio, err := client.Speech.Create(ctx, &models.SpeechRequest{
+	Model:    models.TTSBulbulV3,
 	Voice:    "shubh",
-	Language: sarvam.LangEnglish,
+	Language: models.LangEnglish,
 	Text:     "The quick brown fox jumps over the lazy dog.",
-	Format:   sarvam.MP3(24000, 128),
+	Format:   models.MP3(24000, 128),
 
 	// Optional fields are pointers: nil means "let the server decide"
-	Speed:       sarvam.Float(1.05),
-	Temperature: sarvam.Float(0.6),
+	Speed:       models.Float(1.05),
+	Temperature: models.Float(0.6),
 })
 
 audio.Save("fox.mp3")
@@ -107,12 +108,12 @@ io.Copy(w, audio) // Audio is an io.Reader and an io.WriterTo
 ### Streaming
 
 ```go
-stream, err := client.Speech.Stream(ctx, &sarvam.SpeechRequest{
-	Model:    sarvam.TTSBulbulV3,
+stream, err := client.Speech.Stream(ctx, &models.SpeechRequest{
+	Model:    models.TTSBulbulV3,
 	Voice:    "shubh",
-	Language: sarvam.LangEnglish,
+	Language: models.LangEnglish,
 	Text:     "Audio arrives as it is made.",
-	Format:   sarvam.MP3(24000, 128),
+	Format:   models.MP3(24000, 128),
 })
 if err != nil {
 	return err
@@ -141,8 +142,8 @@ for chunk, err := range stream.All() {
 For piping the tokens of a language model into speech without waiting for whole sentences.
 
 ```go
-duplex, err := client.Speech.Duplex(ctx, &sarvam.SpeechRequest{
-	Model: sarvam.TTSBulbulV3, Voice: "shubh", Language: sarvam.LangEnglish,
+duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+	Model: models.TTSBulbulV3, Voice: "shubh", Language: models.LangEnglish,
 })
 defer duplex.Close()
 
@@ -164,10 +165,10 @@ return duplex.Err()
 ## Transcription
 
 ```go
-result, err := client.Transcription.Create(ctx, &sarvam.TranscriptionRequest{
-	Model:      sarvam.STTSaarasV4,
-	Audio:      sarvam.FileInput("meeting.wav"),
-	Language:   sarvam.LangHindi, // leave empty to auto-detect
+result, err := client.Transcription.Create(ctx, &models.TranscriptionRequest{
+	Model:      models.STTSaarasV4,
+	Audio:      models.FileInput("meeting.wav"),
+	Language:   models.LangHindi, // leave empty to auto-detect
 	Timestamps: true,
 })
 
@@ -185,9 +186,9 @@ This endpoint takes clips of up to 30 seconds. Longer audio is refused before th
 Audio can come from anywhere:
 
 ```go
-sarvam.FileInput("clip.mp3")                              // from disk, streamed
-sarvam.BytesInput(buf, sarvam.WAV(16000))                 // from memory
-sarvam.ReaderInput(r, "recording.wav", "audio/wav")       // any io.Reader
+models.FileInput("clip.mp3")                              // from disk, streamed
+models.BytesInput(buf, models.WAV(16000))                 // from memory
+models.ReaderInput(r, "recording.wav", "audio/wav")       // any io.Reader
 ```
 
 `FileInput` and `ReaderInput` stream into the multipart body, so a 200MB file never lands in RAM. A plain reader cannot be rewound, so those requests are not retried.
@@ -195,10 +196,10 @@ sarvam.ReaderInput(r, "recording.wav", "audio/wav")       // any io.Reader
 ### Live transcription
 
 ```go
-stream, err := client.Transcription.Stream(ctx, &sarvam.TranscriptionStreamRequest{
-	Model:       sarvam.STTSaarasV3Realtime,
-	InputFormat: sarvam.PCM16(16000),
-	StreamType:  sarvam.StreamFast,
+stream, err := client.Transcription.Stream(ctx, &models.TranscriptionStreamRequest{
+	Model:       models.STTSaarasV3Realtime,
+	InputFormat: models.PCM16(16000),
+	StreamType:  models.StreamFast,
 })
 defer stream.Close()
 
@@ -218,13 +219,13 @@ for {
 		return err
 	}
 	switch e := event.(type) {
-	case *sarvam.PartialTranscript:
+	case *models.PartialTranscript:
 		fmt.Printf("\r%s", e.Text)
-	case *sarvam.FinalTranscript:
+	case *models.FinalTranscript:
 		fmt.Printf("\r%s\n", e.Text)
-	case *sarvam.SpeechStarted:
-	case *sarvam.SpeechEnded:
-	case *sarvam.SessionEnded:
+	case *models.SpeechStarted:
+	case *models.SpeechEnded:
+	case *models.SessionEnded:
 		fmt.Printf("billed %.1fs\n", e.AudioDuration.Seconds())
 	}
 }
@@ -237,9 +238,9 @@ Live sessions take PCM16, mu-law or A-law at 8 or 16 kHz. Anything else is refus
 Up to 20 files per job, two hours each. This is the only Sarvam API that labels speakers.
 
 ```go
-job, err := client.Batch.Create(ctx, &sarvam.BatchRequest{
-	Files:       []sarvam.Input{sarvam.FileInput("interview.wav")},
-	Model:       sarvam.STTSaarasV4,
+job, err := client.Batch.Create(ctx, &models.BatchRequest{
+	Files:       []models.Input{models.FileInput("interview.wav")},
+	Model:       models.STTSaarasV4,
 	Diarize:     true,
 	NumSpeakers: 2, // 0 lets the model work it out
 	Timestamps:  true,
@@ -260,14 +261,14 @@ for name, result := range results {
 ## Audio Formats
 
 ```go
-sarvam.MP3(44100, 128)
-sarvam.WAV(24000)
-sarvam.FLAC(24000)
-sarvam.Opus(24000, 64)
-sarvam.AAC(24000, 128)
-sarvam.PCM16(24000)  // raw, for realtime playback
-sarvam.ULaw8000()    // telephony
-sarvam.ALaw8000()
+models.MP3(44100, 128)
+models.WAV(24000)
+models.FLAC(24000)
+models.Opus(24000, 64)
+models.AAC(24000, 128)
+models.PCM16(24000)  // raw, for realtime playback
+models.ULaw8000()    // telephony
+models.ALaw8000()
 ```
 
 `Audio` carries the format with the bytes, so nothing has to remember what was asked for:
@@ -320,7 +321,7 @@ client, err := sarvam.New(
 	sarvam.WithTimeout(5*time.Minute),
 	sarvam.WithMaxRetries(3),
 	sarvam.WithRetryDelays(time.Second, 60*time.Second),
-	sarvam.WithDefaultFormat(sarvam.WAV(24000)),
+	sarvam.WithDefaultFormat(models.WAV(24000)),
 	sarvam.WithMaxConcurrency(8),
 	sarvam.WithUserAgent("MyApp/1.0"),
 	sarvam.WithLogger(slog.Default()),
@@ -376,26 +377,38 @@ Sarvam has no API for voice cloning (it is done in their dashboard), listing voi
 
 ## Project Structure
 
+The layout follows the Rust SDK: the library lives in `src/`, and the request
+and response types live in `src/models/`. So you import two packages — `src`
+for the client, `src/models` for the types you fill in.
+
 ```
 sarvam-go-sdk/
-├── client.go          Client, New, NewFromEnv, HTTP plumbing and retries
-├── options.go         With* options and defaults
-├── errors.go          sentinels and typed errors
-├── audio.go           Audio
-├── format.go          Format, Codec, MIME types
-├── input.go           Input: FileInput, BytesInput, ReaderInput
-├── ptr.go             Float, Int, Bool, String helpers
-├── models.go          model IDs, languages, modes
-├── speech.go          SpeechService: Create, Stream, Duplex
-├── transcription.go   TranscriptionService: Create, Stream
-├── batch.go           BatchService: Create, Get, Wait, Results
-├── retry.go           backoff
-├── ws.go              WebSocket connection
-├── internal/wav       WAV header reading and writing
-├── internal/multipart streaming form encoder
-├── playback/          optional: play audio through the speakers
-├── mic/               optional: capture from the microphone
-└── examples/          one folder per runnable example
+├── go.mod  go.sum  README.md
+├── src/
+│   ├── sarvam.go          version
+│   ├── client.go          Client, New, NewFromEnv, HTTP plumbing and retries
+│   ├── options.go         With* options and defaults
+│   ├── errors.go          sentinels and typed errors
+│   ├── retry.go           backoff
+│   ├── ws.go              WebSocket connection
+│   ├── speech.go          SpeechService: Create, Stream, Duplex
+│   ├── transcription.go   TranscriptionService: Create, Stream
+│   ├── batch.go           BatchService: Create, Get, Wait, Results
+│   └── models/
+│       ├── speech.go         SpeechRequest, AudioChunk
+│       ├── transcription.go  TranscriptionRequest, results, live events
+│       ├── batch.go          BatchRequest, Job, JobState
+│       ├── audio.go          Audio
+│       ├── format.go         Format, Codec
+│       ├── input.go          Input: FileInput, BytesInput, ReaderInput
+│       ├── models.go         model IDs, languages, modes
+│       └── ptr.go            Float, Int, Bool, String helpers
+├── internal/
+│   ├── wav/                WAV header reading and writing
+│   └── multipart/          streaming form encoder
+├── playback/              optional: play audio through the speakers
+├── mic/                   optional: capture from the microphone
+└── examples/              one folder per runnable example
 ```
 
 ## Adding an Endpoint

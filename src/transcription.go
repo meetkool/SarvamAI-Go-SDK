@@ -9,31 +9,21 @@ import (
 	"log/slog"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/crynta/sarvam-go-sdk/internal/multipart"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 const restAudioLimit = 30 * time.Second
 
 type TranscriptionService struct{ client *Client }
 
-type TranscriptionRequest struct {
-	Model      Model
-	Audio      Input
-	Language   Language
-	Mode       Mode
-	Timestamps bool
-	Keyterms   []string
-	InputCodec string
-}
-
-func (t *TranscriptionService) Create(ctx context.Context, req *TranscriptionRequest) (*TranscriptionResult, error) {
+func (t *TranscriptionService) Create(ctx context.Context, req *models.TranscriptionRequest) (*models.TranscriptionResult, error) {
 	if req == nil || req.Audio == nil {
-		return nil, invalidRequest("Audio is required")
+		return nil, invalidRequest("models.Audio is required")
 	}
-	if d, ok := req.Audio.duration(); ok && d > restAudioLimit {
+	if d, ok := req.Audio.Duration(); ok && d > restAudioLimit {
 		return nil, &AudioTooLongError{Duration: d, MaxDuration: restAudioLimit, Endpoint: "/speech-to-text"}
 	}
 
@@ -65,68 +55,6 @@ func (t *TranscriptionService) Create(ctx context.Context, req *TranscriptionReq
 	return out.result(), nil
 }
 
-type TranscriptionResult struct {
-	RequestID string
-	Text      string
-	Language  Language
-
-	LanguageProbability float64
-
-	Words []Word
-}
-
-type Word struct {
-	Text    string
-	Start   time.Duration
-	End     time.Duration
-	Speaker string
-}
-
-type SpeakerTurn struct {
-	Speaker string
-	Text    string
-	Start   time.Duration
-	End     time.Duration
-}
-
-func (r *TranscriptionResult) SpeakerTurns() []SpeakerTurn {
-	var turns []SpeakerTurn
-	for _, w := range r.Words {
-		if n := len(turns); n > 0 && turns[n-1].Speaker == w.Speaker {
-			turns[n-1].Text += " " + w.Text
-			turns[n-1].End = w.End
-			continue
-		}
-		turns = append(turns, SpeakerTurn{Speaker: w.Speaker, Text: w.Text, Start: w.Start, End: w.End})
-	}
-	return turns
-}
-
-func (r *TranscriptionResult) SRT() string {
-	var b strings.Builder
-	for i, w := range r.Words {
-		fmt.Fprintf(&b, "%d\n%s --> %s\n%s\n\n", i+1, timestamp(w.Start, ','), timestamp(w.End, ','), w.Text)
-	}
-	return b.String()
-}
-
-func (r *TranscriptionResult) VTT() string {
-	var b strings.Builder
-	b.WriteString("WEBVTT\n\n")
-	for _, w := range r.Words {
-		fmt.Fprintf(&b, "%s --> %s\n%s\n\n", timestamp(w.Start, '.'), timestamp(w.End, '.'), w.Text)
-	}
-	return b.String()
-}
-
-func timestamp(d time.Duration, sep byte) string {
-	if d < 0 {
-		d = 0
-	}
-	return fmt.Sprintf("%02d:%02d:%02d%c%03d",
-		int(d/time.Hour), int(d/time.Minute)%60, int(d/time.Second)%60, sep, int(d/time.Millisecond)%1000)
-}
-
 type sttResponse struct {
 	RequestID           string  `json:"request_id"`
 	Transcript          string  `json:"transcript"`
@@ -148,17 +76,17 @@ type sttResponse struct {
 	} `json:"diarized_transcript"`
 }
 
-func (r *sttResponse) result() *TranscriptionResult {
-	out := &TranscriptionResult{
+func (r *sttResponse) result() *models.TranscriptionResult {
+	out := &models.TranscriptionResult{
 		RequestID:           r.RequestID,
 		Text:                r.Transcript,
-		Language:            Language(r.LanguageCode),
+		Language:            models.Language(r.LanguageCode),
 		LanguageProbability: r.LanguageProbability,
 	}
 
 	if d := r.DiarizedTranscript; d != nil && len(d.Entries) > 0 {
 		for _, e := range d.Entries {
-			out.Words = append(out.Words, Word{
+			out.Words = append(out.Words, models.Word{
 				Text:    e.Transcript,
 				Start:   floatSeconds(e.Start),
 				End:     floatSeconds(e.End),
@@ -174,7 +102,7 @@ func (r *sttResponse) result() *TranscriptionResult {
 			texts = t.Chunks
 		}
 		for i, text := range texts {
-			w := Word{Text: text}
+			w := models.Word{Text: text}
 			if i < len(t.Start) {
 				w.Start = floatSeconds(t.Start[i])
 			}
@@ -209,30 +137,15 @@ func (f *flexString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-var realtimeFormats = []Format{PCM16(16000), PCM16(8000), ULaw8000(), ALaw8000()}
+var realtimeFormats = []models.Format{models.PCM16(16000), models.PCM16(8000), models.ULaw8000(), models.ALaw8000()}
 
-type TranscriptionStreamRequest struct {
-	Model       Model
-	Language    Language
-	Mode        Mode
-	InputFormat Format
-	StreamType  StreamType
-	Prompt      string
-	Timestamps  bool
-
-	ManualEndpointing bool
-	VADThreshold      *float64
-	SilenceDuration   time.Duration
-	MinSpeechDuration time.Duration
-}
-
-func (t *TranscriptionService) Stream(ctx context.Context, req *TranscriptionStreamRequest) (*TranscriptionStream, error) {
+func (t *TranscriptionService) Stream(ctx context.Context, req *models.TranscriptionStreamRequest) (*TranscriptionStream, error) {
 	if req == nil {
-		req = &TranscriptionStreamRequest{}
+		req = &models.TranscriptionStreamRequest{}
 	}
 	format := req.InputFormat
 	if format.IsZero() {
-		format = PCM16(16000)
+		format = models.PCM16(16000)
 	}
 	if !supportedRealtimeFormat(format) {
 		return nil, &FormatError{Format: format, Endpoint: "realtime transcription", Supported: realtimeFormats}
@@ -282,7 +195,7 @@ func (t *TranscriptionService) Stream(ctx context.Context, req *TranscriptionStr
 	return &TranscriptionStream{ws: ws, format: format, log: t.client.log}, nil
 }
 
-func supportedRealtimeFormat(f Format) bool {
+func supportedRealtimeFormat(f models.Format) bool {
 	for _, supported := range realtimeFormats {
 		if f == supported {
 			return true
@@ -293,12 +206,12 @@ func supportedRealtimeFormat(f Format) bool {
 
 type TranscriptionStream struct {
 	ws     *wsConn
-	format Format
+	format models.Format
 	log    *slog.Logger
 	closed bool
 }
 
-func (s *TranscriptionStream) Format() Format { return s.format }
+func (s *TranscriptionStream) Format() models.Format { return s.format }
 
 func (s *TranscriptionStream) SendAudio(ctx context.Context, frame []byte) error {
 	if len(frame) == 0 {
@@ -334,47 +247,6 @@ func (s *TranscriptionStream) Close() error {
 	return s.ws.close()
 }
 
-type TranscriptionEvent interface{ isTranscriptionEvent() }
-
-type SessionStarted struct{ RequestID string }
-
-type SpeechStarted struct {
-	Utterance  int
-	Confidence float64
-}
-
-type SpeechEnded struct {
-	Utterance  int
-	Confidence float64
-}
-
-type PartialTranscript struct {
-	Utterance int
-	Text      string
-	Language  Language
-}
-
-type FinalTranscript struct {
-	Utterance          int
-	Text               string
-	Language           Language
-	LanguageConfidence float64
-	Start              time.Duration
-	End                time.Duration
-}
-
-type SessionEnded struct {
-	AudioDuration time.Duration
-	Utterances    int
-}
-
-func (*SessionStarted) isTranscriptionEvent()    {}
-func (*SpeechStarted) isTranscriptionEvent()     {}
-func (*SpeechEnded) isTranscriptionEvent()       {}
-func (*PartialTranscript) isTranscriptionEvent() {}
-func (*FinalTranscript) isTranscriptionEvent()   {}
-func (*SessionEnded) isTranscriptionEvent()      {}
-
 type realtimeEvent struct {
 	Event              string  `json:"event"`
 	RequestID          string  `json:"request_id"`
@@ -393,7 +265,7 @@ type realtimeEvent struct {
 	StatusCode         int     `json:"status_code"`
 }
 
-func (s *TranscriptionStream) Next(ctx context.Context) (TranscriptionEvent, error) {
+func (s *TranscriptionStream) Next(ctx context.Context) (models.TranscriptionEvent, error) {
 	if s.closed {
 		return nil, io.EOF
 	}
@@ -410,24 +282,24 @@ func (s *TranscriptionStream) Next(ctx context.Context) (TranscriptionEvent, err
 
 		switch ev.Event {
 		case "session.begin":
-			return &SessionStarted{RequestID: ev.RequestID}, nil
+			return &models.SessionStarted{RequestID: ev.RequestID}, nil
 		case "vad.speech_start":
-			return &SpeechStarted{Utterance: ev.UtteranceIdx, Confidence: ev.Confidence}, nil
+			return &models.SpeechStarted{Utterance: ev.UtteranceIdx, Confidence: ev.Confidence}, nil
 		case "vad.speech_end":
-			return &SpeechEnded{Utterance: ev.UtteranceIdx, Confidence: ev.Confidence}, nil
+			return &models.SpeechEnded{Utterance: ev.UtteranceIdx, Confidence: ev.Confidence}, nil
 		case "transcript.partial":
-			return &PartialTranscript{Utterance: ev.UtteranceIdx, Text: ev.Text, Language: Language(ev.Language)}, nil
+			return &models.PartialTranscript{Utterance: ev.UtteranceIdx, Text: ev.Text, Language: models.Language(ev.Language)}, nil
 		case "transcript.final":
-			return &FinalTranscript{
+			return &models.FinalTranscript{
 				Utterance:          ev.UtteranceIdx,
 				Text:               ev.Text,
-				Language:           Language(ev.Language),
+				Language:           models.Language(ev.Language),
 				LanguageConfidence: ev.LanguageConfidence,
 				Start:              floatSeconds(ev.StartS),
 				End:                floatSeconds(ev.EndS),
 			}, nil
 		case "session.end":
-			return &SessionEnded{
+			return &models.SessionEnded{
 				AudioDuration: floatSeconds(ev.AudioDurationS),
 				Utterances:    ev.TotalUtterances,
 			}, nil

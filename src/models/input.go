@@ -1,4 +1,4 @@
-package sarvam
+package models
 
 import (
 	"bytes"
@@ -13,12 +13,12 @@ import (
 )
 
 type Input interface {
-	filename() string
-	contentType() string
-	open() (io.ReadCloser, error)
-	size() int64
-	replayable() bool
-	duration() (time.Duration, bool)
+	Filename() string
+	ContentType() string
+	Open() (io.ReadCloser, error)
+	Size() int64
+	Replayable() bool
+	Duration() (time.Duration, bool)
 }
 
 func FileInput(path string) Input            { return &fileInput{path} }
@@ -33,12 +33,12 @@ func ReaderInput(r io.Reader, name, ctype string) Input {
 
 type fileInput struct{ path string }
 
-func (f *fileInput) filename() string             { return filepath.Base(f.path) }
-func (f *fileInput) contentType() string          { return mimeType(f.path) }
-func (f *fileInput) replayable() bool             { return true }
-func (f *fileInput) open() (io.ReadCloser, error) { return os.Open(f.path) }
+func (f *fileInput) Filename() string             { return filepath.Base(f.path) }
+func (f *fileInput) ContentType() string          { return mimeType(f.path) }
+func (f *fileInput) Replayable() bool             { return true }
+func (f *fileInput) Open() (io.ReadCloser, error) { return os.Open(f.path) }
 
-func (f *fileInput) size() int64 {
+func (f *fileInput) Size() int64 {
 	st, err := os.Stat(f.path)
 	if err != nil {
 		return -1
@@ -46,7 +46,7 @@ func (f *fileInput) size() int64 {
 	return st.Size()
 }
 
-func (f *fileInput) duration() (time.Duration, bool) {
+func (f *fileInput) Duration() (time.Duration, bool) {
 	if !strings.EqualFold(filepath.Ext(f.path), ".wav") {
 		return 0, false
 	}
@@ -65,7 +65,7 @@ func (f *fileInput) duration() (time.Duration, bool) {
 	if err != nil {
 		return 0, false
 	}
-	d := seconds(int(f.size())-info.DataOffset, info.SampleRate*info.Channels*info.BitsPerSample/8)
+	d := seconds(int(f.Size())-info.DataOffset, info.SampleRate*info.Channels*info.BitsPerSample/8)
 	return d, d > 0
 }
 
@@ -74,14 +74,14 @@ type bytesInput struct {
 	format Format
 }
 
-func (b *bytesInput) filename() string    { return "audio." + b.format.extension() }
-func (b *bytesInput) contentType() string { return b.format.MIMEType() }
-func (b *bytesInput) size() int64         { return int64(len(b.data)) }
-func (b *bytesInput) replayable() bool    { return true }
-func (b *bytesInput) open() (io.ReadCloser, error) {
+func (b *bytesInput) Filename() string    { return "audio." + b.format.extension() }
+func (b *bytesInput) ContentType() string { return b.format.MIMEType() }
+func (b *bytesInput) Size() int64         { return int64(len(b.data)) }
+func (b *bytesInput) Replayable() bool    { return true }
+func (b *bytesInput) Open() (io.ReadCloser, error) {
 	return io.NopCloser(bytes.NewReader(b.data)), nil
 }
-func (b *bytesInput) duration() (time.Duration, bool) {
+func (b *bytesInput) Duration() (time.Duration, bool) {
 	d := newAudio(b.data, b.format).Duration()
 	return d, d > 0
 }
@@ -92,13 +92,13 @@ type readerInput struct {
 	mime string
 }
 
-func (r *readerInput) filename() string                { return r.name }
-func (r *readerInput) contentType() string             { return r.mime }
-func (r *readerInput) size() int64                     { return -1 }
-func (r *readerInput) replayable() bool                { return false }
-func (r *readerInput) duration() (time.Duration, bool) { return 0, false }
+func (r *readerInput) Filename() string                { return r.name }
+func (r *readerInput) ContentType() string             { return r.mime }
+func (r *readerInput) Size() int64                     { return -1 }
+func (r *readerInput) Replayable() bool                { return false }
+func (r *readerInput) Duration() (time.Duration, bool) { return 0, false }
 
-func (r *readerInput) open() (io.ReadCloser, error) {
+func (r *readerInput) Open() (io.ReadCloser, error) {
 	if rc, ok := r.r.(io.ReadCloser); ok {
 		return rc, nil
 	}
@@ -127,8 +127,8 @@ func mimeType(name string) string {
 	return "application/octet-stream"
 }
 
-func readAll(in Input) ([]byte, error) {
-	body, err := in.open()
+func ReadAll(in Input) ([]byte, error) {
+	body, err := in.Open()
 	if err != nil {
 		return nil, err
 	}

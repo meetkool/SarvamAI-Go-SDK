@@ -1,4 +1,4 @@
-package sarvam
+package models
 
 import (
 	"bytes"
@@ -67,25 +67,6 @@ func TestAudioSaveReadAndWriteTo(t *testing.T) {
 	}
 }
 
-func TestJoinAudio(t *testing.T) {
-	half := testWAV(24000, 500*time.Millisecond)
-	joined, err := joinAudio([][]byte{half, half}, WAV(24000))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := newAudio(joined, WAV(24000)).Duration(); got != time.Second {
-		t.Fatalf("joined duration = %v, want 1s", got)
-	}
-
-	raw, err := joinAudio([][]byte{{1, 2}, {3, 4}}, MP3(24000, 128))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(raw, []byte{1, 2, 3, 4}) {
-		t.Fatalf("joined mp3 = %v", raw)
-	}
-}
-
 func TestWAVParseRejectsRubbish(t *testing.T) {
 	if _, err := wav.Parse([]byte("not a wav file at all")); err == nil {
 		t.Fatal("want an error for a non-WAV file")
@@ -95,16 +76,16 @@ func TestWAVParseRejectsRubbish(t *testing.T) {
 func TestBytesInput(t *testing.T) {
 	in := BytesInput(testWAV(16000, 2*time.Second), WAV(16000))
 
-	if got := in.filename(); got != "audio.wav" {
+	if got := in.Filename(); got != "audio.wav" {
 		t.Errorf("filename = %q", got)
 	}
-	if got := in.contentType(); got != "audio/wav" {
+	if got := in.ContentType(); got != "audio/wav" {
 		t.Errorf("contentType = %q", got)
 	}
-	if !in.replayable() {
+	if !in.Replayable() {
 		t.Error("bytes should be replayable, so the upload can be retried")
 	}
-	d, ok := in.duration()
+	d, ok := in.Duration()
 	if !ok || d != 2*time.Second {
 		t.Errorf("duration = %v, %v; want 2s, true", d, ok)
 	}
@@ -117,27 +98,27 @@ func TestFileInputReadsDurationFromDisk(t *testing.T) {
 	}
 
 	in := FileInput(path)
-	d, ok := in.duration()
+	d, ok := in.Duration()
 	if !ok || d != 3*time.Second {
 		t.Fatalf("duration = %v, %v; want 3s, true", d, ok)
 	}
-	if got := in.contentType(); got != "audio/wav" {
+	if got := in.ContentType(); got != "audio/wav" {
 		t.Errorf("contentType = %q", got)
 	}
-	if got := in.size(); got != int64(len(testWAV(16000, 3*time.Second))) {
+	if got := in.Size(); got != int64(len(testWAV(16000, 3*time.Second))) {
 		t.Errorf("size = %d", got)
 	}
 }
 
 func TestReaderInputIsNotReplayable(t *testing.T) {
 	in := ReaderInput(bytes.NewReader([]byte("x")), "clip.mp3", "")
-	if in.replayable() {
+	if in.Replayable() {
 		t.Error("a plain reader cannot be rewound, so it must not be retried")
 	}
-	if got := in.contentType(); got != "audio/mpeg" {
+	if got := in.ContentType(); got != "audio/mpeg" {
 		t.Errorf("contentType = %q, want audio/mpeg from the file name", got)
 	}
-	if got := in.size(); got != -1 {
+	if got := in.Size(); got != -1 {
 		t.Errorf("size = %d, want -1 for an unknown length", got)
 	}
 }

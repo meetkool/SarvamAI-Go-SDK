@@ -11,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"bytes"
 	"github.com/coder/websocket"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func wsTestClient(t *testing.T, handler func(*websocket.Conn)) *Client {
@@ -47,25 +49,25 @@ func TestSpeechCreate(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"request_id": "req-1", "audios": []string{clip}})
 	})
 
-	audio, err := client.Speech.Create(context.Background(), &SpeechRequest{
-		Model:    TTSBulbulV3,
+	audio, err := client.Speech.Create(context.Background(), &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: LangHindi,
+		Language: models.LangHindi,
 		Text:     "Namaste",
-		Format:   WAV(24000),
-		Speed:    Float(1.1),
+		Format:   models.WAV(24000),
+		Speed:    models.Float(1.1),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if sent.Text != "Namaste" || sent.LanguageCode != LangHindi || sent.Speaker != "shubh" {
+	if sent.Text != "Namaste" || sent.LanguageCode != models.LangHindi || sent.Speaker != "shubh" {
 		t.Errorf("request body = %+v", sent)
 	}
 	if sent.Pace == nil || *sent.Pace != 1.1 {
 		t.Errorf("pace = %v, want 1.1", sent.Pace)
 	}
-	if sent.SpeechSampleRate != 24000 || sent.OutputAudioCodec != CodecWAV {
+	if sent.SpeechSampleRate != 24000 || sent.OutputAudioCodec != models.CodecWAV {
 		t.Errorf("format fields = %d %q", sent.SpeechSampleRate, sent.OutputAudioCodec)
 	}
 	if sent.OutputAudioBitrate != "" {
@@ -82,8 +84,8 @@ func TestSpeechCreateJoinsSeveralClips(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]any{"audios": []string{half, half}})
 	})
 
-	audio, err := client.Speech.Create(context.Background(), &SpeechRequest{
-		Language: LangHindi, Text: "Namaste", Format: WAV(24000),
+	audio, err := client.Speech.Create(context.Background(), &models.SpeechRequest{
+		Language: models.LangHindi, Text: "Namaste", Format: models.WAV(24000),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,8 +100,8 @@ func TestSpeechCreateChecksTheRequest(t *testing.T) {
 		t.Error("an invalid request must not reach the server")
 	})
 
-	for _, req := range []*SpeechRequest{
-		{Language: LangHindi},
+	for _, req := range []*models.SpeechRequest{
+		{Language: models.LangHindi},
 		{Text: "Namaste"},
 	} {
 		if _, err := client.Speech.Create(context.Background(), req); !errors.Is(err, ErrInvalidRequest) {
@@ -127,8 +129,8 @@ func TestSpeechStream(t *testing.T) {
 		}
 	})
 
-	stream, err := client.Speech.Stream(context.Background(), &SpeechRequest{
-		Language: LangEnglish, Text: "hello", Format: MP3(24000, 128),
+	stream, err := client.Speech.Stream(context.Background(), &models.SpeechRequest{
+		Language: models.LangEnglish, Text: "hello", Format: models.MP3(24000, 128),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,8 +192,8 @@ func TestSpeechDuplex(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	duplex, err := client.Speech.Duplex(ctx, &SpeechRequest{
-		Voice: "shubh", Language: LangEnglish, Format: MP3(24000, 128),
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish, Format: models.MP3(24000, 128),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -224,8 +226,8 @@ func TestSpeechDuplexReportsServerErrors(t *testing.T) {
 			[]byte(`{"type":"error","data":{"message":"voice not available","code":422}}`))
 	})
 
-	duplex, err := client.Speech.Duplex(context.Background(), &SpeechRequest{
-		Voice: "shubh", Language: LangEnglish,
+	duplex, err := client.Speech.Duplex(context.Background(), &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -238,5 +240,24 @@ func TestSpeechDuplexReportsServerErrors(t *testing.T) {
 	var apiErr *APIError
 	if !errors.As(duplex.Err(), &apiErr) || apiErr.StatusCode != 422 {
 		t.Fatalf("Err = %v, want an *APIError with status 422", duplex.Err())
+	}
+}
+
+func TestJoinAudio(t *testing.T) {
+	half := testWAV(24000, 500*time.Millisecond)
+	joined, err := joinAudio([][]byte{half, half}, models.WAV(24000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := models.NewAudio(joined, models.WAV(24000)).Duration(); got != time.Second {
+		t.Fatalf("joined duration = %v, want 1s", got)
+	}
+
+	raw, err := joinAudio([][]byte{{1, 2}, {3, 4}}, models.MP3(24000, 128))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, []byte{1, 2, 3, 4}) {
+		t.Fatalf("joined mp3 = %v", raw)
 	}
 }

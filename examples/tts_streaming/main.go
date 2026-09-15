@@ -6,7 +6,8 @@ import (
 	"log"
 	"os"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -15,12 +16,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stream, err := client.Speech.Stream(context.Background(), &sarvam.SpeechRequest{
-		Model:    sarvam.TTSBulbulV3,
+	stream, err := client.Speech.Stream(context.Background(), &models.SpeechRequest{
+		Model:    models.TTSBulbulV3,
 		Voice:    "shubh",
-		Language: sarvam.LangEnglish,
+		Language: models.LangEnglish,
 		Text:     "Streaming audio arrives piece by piece, so you can play it as it is made.",
-		Format:   sarvam.MP3(24000, 128),
+		Format:   models.MP3(24000, 128),
 	})
 	if err != nil {
 		log.Fatal(err)

@@ -6,7 +6,8 @@ import (
 	"log"
 	"os"
 
-	sarvam "github.com/crynta/sarvam-go-sdk"
+	sarvam "github.com/crynta/sarvam-go-sdk/src"
+	"github.com/crynta/sarvam-go-sdk/src/models"
 )
 
 func main() {
@@ -20,9 +21,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	result, err := client.Transcription.Create(context.Background(), &sarvam.TranscriptionRequest{
-		Model:      sarvam.STTSaarasV4,
-		Audio:      sarvam.FileInput(path),
+	result, err := client.Transcription.Create(context.Background(), &models.TranscriptionRequest{
+		Model:      models.STTSaarasV4,
+		Audio:      models.FileInput(path),
 		Timestamps: true,
 	})
 	if err != nil {

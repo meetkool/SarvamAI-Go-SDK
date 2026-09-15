@@ -3,6 +3,7 @@ package sarvam
 import (
 	"context"
 	"errors"
+	"github.com/crynta/sarvam-go-sdk/internal/wav"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -175,4 +176,9 @@ func TestRunningOutOfCreditsIsNotRetried(t *testing.T) {
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("calls = %d, want 1: retrying will not refill credits", got)
 	}
+}
+
+func testWAV(sampleRate int, d time.Duration) []byte {
+	samples := int(float64(sampleRate) * d.Seconds())
+	return append(wav.Header(sampleRate, 1, 16, samples*2), make([]byte, samples*2)...)
 }
