@@ -4,6 +4,8 @@ A Go SDK for the [Sarvam AI](https://www.sarvam.ai) audio APIs: text to speech, 
 
 ## Features
 
+- **Metrics** — first-token and first-audio timings, the numbers latency work needs
+- **Audio helpers** — mu-law, resampling and WAV wrapping for telephony
 - **Chat** — Sarvam-105B, one-shot or streamed token by token, with tool calling
 - **Text to speech** — 30+ voices across 11 Indian languages
 - **Streaming speech** — audio arrives piece by piece, so playback starts early
@@ -216,6 +218,30 @@ return duplex.Err()
 
 `SendText` from one goroutine while another runs `Next` is safe: writes are serialized inside.
 
+### Feeding an LLM into speech
+
+`SendText` sends exactly what you hand it, which chops words when the source is
+a token stream — a token is often half a word, and Indic words are three or four
+tokens. Use `SendToken`, which buffers and only sends whole sentences:
+
+```go
+for stream.Next() {
+	duplex.SendToken(ctx, stream.Chunk().Content())
+}
+duplex.CloseSend(ctx)
+```
+
+Sentences break on `.` `!` `?` `।` `॥` and newlines, and on a comma once one runs
+past `SentenceLimit` characters (160 by default). Decimal points do not count.
+
+`duplex.SpokenText()` returns the text whose audio actually arrived. When a user
+interrupts, that — not the full generated reply — is what the assistant really
+said, so it is what belongs in the conversation history.
+
+`duplex.Reset()` starts a fresh utterance on the same open connection, saving the
+handshake on every turn. The socket stays up until you `Close()` it.
+
+
 Text with no letters in it — a stray newline, or a lone `!` arriving as its own
 token — is skipped instead of sent. The API rejects such messages and closes the
 whole connection, which would otherwise end the reply mid-sentence.
@@ -399,6 +425,42 @@ client, err := sarvam.New(
 
 **Streams and realtime sessions are never retried** once bytes have reached you, because replaying them would repeat audio. `WithTimeout` does not apply to them either: bound those with `context.WithTimeout`.
 
+## Metrics
+
+```go
+client, err := sarvam.New(
+	sarvam.WithAPIKey(key),
+	sarvam.WithMetrics(func(m sarvam.Metric) {
+		log.Printf("%s %s %v status=%d", m.Name, m.Endpoint, m.Duration, m.Status)
+	}),
+)
+```
+
+| Metric | Fires on |
+| --- | --- |
+| `http.request` | every HTTP call — path, status, duration |
+| `http.retry` | each retry, with the attempt number |
+| `chat.first_token` | request to first streamed token |
+| `tts.first_audio` | opening a duplex to the first audio chunk |
+
+Time to first audio is the number that decides whether a voice agent feels alive,
+and it is the one you cannot guess.
+
+## Audio Helpers
+
+Telephony runs on 8 kHz mu-law, so the conversions live in `models`:
+
+```go
+pcm  := models.ULawToPCM16(ulaw)
+ulaw := models.PCM16ToULaw(pcm)
+down := models.ResamplePCM16(pcm, 24000, 8000)
+
+wav := models.WrapWAV(pcm, 8000)
+pcm, rate, err := models.UnwrapWAV(wav)
+
+pcm, rate, err := audio.PCM16()   // WAV, raw PCM or mu-law, whatever came back
+```
+
 ## Error Handling
 
 ```go
@@ -451,6 +513,7 @@ sarvam-go-sdk/
 │   ├── ws.go              WebSocket connection
 │   ├── stream.go          Server-Sent Events reader
 │   ├── chat.go            ChatService: Create, Stream
+│   ├── metrics.go         Metric and the WithMetrics hook
 │   ├── speech.go          SpeechService: Create, Stream, Duplex
 │   ├── transcription.go   TranscriptionService: Create, Stream
 │   ├── batch.go           BatchService: Create, Get, Wait, Results
@@ -460,6 +523,7 @@ sarvam-go-sdk/
 │       ├── transcription.go  TranscriptionRequest, results, live events
 │       ├── batch.go          BatchRequest, Job, JobState
 │       ├── audio.go          Audio
+│       ├── convert.go        mu-law, resampling, WAV helpers
 │       ├── format.go         Format, Codec
 │       ├── input.go          Input: FileInput, BytesInput, ReaderInput
 │       ├── models.go         model IDs, languages, modes

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -325,5 +326,144 @@ func TestSpeechDuplexSkipsUnspeakableText(t *testing.T) {
 	}
 	if len(got) != 1 || got[0] != "hello" {
 		t.Fatalf("server received %q, want only [hello]: text with no letters makes the real API close the socket", got)
+	}
+}
+
+func ttsEchoServer(t *testing.T, flushes chan<- string) *Client {
+	return wsTestClient(t, func(conn *websocket.Conn) {
+		ctx := context.Background()
+		conn.Read(ctx)
+
+		audio := base64.StdEncoding.EncodeToString([]byte{1, 2, 3, 4})
+		for {
+			_, payload, err := conn.Read(ctx)
+			if err != nil {
+				return
+			}
+			var msg struct {
+				Type string `json:"type"`
+				Data struct {
+					Text string `json:"text"`
+				} `json:"data"`
+			}
+			json.Unmarshal(payload, &msg)
+
+			switch msg.Type {
+			case "text":
+				if flushes != nil {
+					flushes <- msg.Data.Text
+				}
+			case "flush":
+				conn.Write(ctx, websocket.MessageText, []byte(`{"type":"audio","data":{"audio":"`+audio+`"}}`))
+				conn.Write(ctx, websocket.MessageText, []byte(`{"type":"event","data":{"event_type":"final"}}`))
+			}
+		}
+	})
+}
+
+func TestSendTokenAggregatesSentences(t *testing.T) {
+	texts := make(chan string, 8)
+	client := ttsEchoServer(t, texts)
+
+	ctx := context.Background()
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer duplex.Close()
+
+	go func() {
+		for _, token := range []string{"\n", "Hello", " there", ".", " Next", " one", "!"} {
+			duplex.SendToken(ctx, token)
+		}
+		duplex.CloseSend(ctx)
+	}()
+
+	for duplex.Next() {
+	}
+	if err := duplex.Err(); err != nil {
+		t.Fatal(err)
+	}
+	close(texts)
+
+	var got []string
+	for text := range texts {
+		got = append(got, text)
+	}
+	want := []string{"Hello there.", " Next one!"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("server received %q, want %q: tokens must be joined into sentences", got, want)
+	}
+}
+
+func TestSpokenTextTracksConfirmedAudio(t *testing.T) {
+	client := ttsEchoServer(t, nil)
+
+	ctx := context.Background()
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer duplex.Close()
+
+	go func() {
+		duplex.SendText(ctx, "Hello there.")
+		duplex.Flush(ctx)
+		time.Sleep(80 * time.Millisecond)
+		duplex.CloseSend(ctx)
+	}()
+
+	chunks := 0
+	for duplex.Next() {
+		chunks++
+	}
+	if err := duplex.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if chunks == 0 {
+		t.Fatal("no audio arrived")
+	}
+	if got := duplex.SpokenText(); got != "Hello there." {
+		t.Fatalf("SpokenText = %q, want the text whose audio was confirmed", got)
+	}
+}
+
+func TestDuplexResetReusesTheConnection(t *testing.T) {
+	client := ttsEchoServer(t, nil)
+
+	ctx := context.Background()
+	duplex, err := client.Speech.Duplex(ctx, &models.SpeechRequest{
+		Voice: "shubh", Language: models.LangEnglish,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer duplex.Close()
+
+	for _, line := range []string{"first turn.", "second turn."} {
+		duplex.Reset()
+
+		go func(text string) {
+			duplex.SendText(ctx, text)
+			duplex.CloseSend(ctx)
+		}(line)
+
+		chunks := 0
+		for duplex.Next() {
+			chunks++
+		}
+		if err := duplex.Err(); err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+		if chunks == 0 {
+			t.Fatalf("%s: no audio on the reused connection", line)
+		}
+		if got := duplex.SpokenText(); got != line {
+			t.Fatalf("SpokenText = %q, want %q", got, line)
+		}
 	}
 }

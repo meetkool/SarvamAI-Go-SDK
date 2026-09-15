@@ -10,8 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"unicode"
+
+	"time"
 
 	"github.com/meetkool/SarvamAI-Go-SDK/internal/wav"
 	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
@@ -263,6 +267,7 @@ func (s *SpeechService) Duplex(ctx context.Context, req *models.SpeechRequest) (
 		query.Set("model", string(req.Model))
 	}
 
+	started := time.Now()
 	ws, err := s.client.dialWS(ctx, "/text-to-speech/ws", query)
 	if err != nil {
 		return nil, err
@@ -291,7 +296,10 @@ func (s *SpeechService) Duplex(ctx context.Context, req *models.SpeechRequest) (
 		return nil, err
 	}
 
-	d := &SpeechDuplex{ws: ws, ctx: ctx, format: format}
+	d := &SpeechDuplex{ws: ws, ctx: ctx, format: format, limit: req.SentenceLimit}
+	d.onFirst = func() {
+		s.client.emit(Metric{Name: MetricFirstAudio, Endpoint: "/text-to-speech/ws", Duration: time.Since(started)})
+	}
 	if req.Text != "" {
 		if err := d.SendText(ctx, req.Text); err != nil {
 			d.Close()
@@ -311,7 +319,18 @@ type SpeechDuplex struct {
 	err          error
 	sendClosed   atomic.Bool
 	pendingFlush atomic.Int32
-	closed       bool
+	limit        int
+	onFirst      func()
+
+	tokenMu  sync.Mutex
+	tokens   strings.Builder
+	queued   strings.Builder
+	inFlight []string
+
+	spokenMu sync.Mutex
+	spoken   strings.Builder
+	closed   bool
+	done     bool
 }
 
 func (d *SpeechDuplex) Format() models.Format { return d.format }
@@ -320,15 +339,77 @@ func (d *SpeechDuplex) SendText(ctx context.Context, text string) error {
 	if !hasSpeakableText(text) {
 		return nil
 	}
-	return d.ws.writeJSON(ctx, ttsClientMessage{
+	err := d.ws.writeJSON(ctx, ttsClientMessage{
 		Type: "text",
 		Data: struct {
 			Text string `json:"text"`
 		}{Text: text},
 	})
+	if err != nil {
+		return err
+	}
+
+	d.tokenMu.Lock()
+	d.queued.WriteString(text)
+	d.tokenMu.Unlock()
+	return nil
+}
+
+func (d *SpeechDuplex) SendToken(ctx context.Context, token string) error {
+	if token == "" {
+		return nil
+	}
+
+	d.tokenMu.Lock()
+	d.tokens.WriteString(token)
+	cut := sentenceCut(d.tokens.String(), d.chunkLimit())
+	if cut <= 0 {
+		d.tokenMu.Unlock()
+		return nil
+	}
+	buffered := d.tokens.String()
+	ready, rest := buffered[:cut], buffered[cut:]
+	d.tokens.Reset()
+	d.tokens.WriteString(rest)
+	d.tokenMu.Unlock()
+
+	if !hasSpeakableText(ready) {
+		return nil
+	}
+	if err := d.SendText(ctx, ready); err != nil {
+		return err
+	}
+	return d.Flush(ctx)
+}
+
+func (d *SpeechDuplex) chunkLimit() int {
+	if d.limit > 0 {
+		return d.limit
+	}
+	return defaultSentenceLimit
+}
+
+func (d *SpeechDuplex) drainTokens(ctx context.Context) error {
+	d.tokenMu.Lock()
+	rest := d.tokens.String()
+	d.tokens.Reset()
+	d.tokenMu.Unlock()
+
+	if !hasSpeakableText(rest) {
+		return nil
+	}
+	return d.SendText(ctx, rest)
 }
 
 func (d *SpeechDuplex) Flush(ctx context.Context) error {
+	d.tokenMu.Lock()
+	spoken := d.queued.String()
+	d.queued.Reset()
+	if spoken != "" {
+		d.inFlight = append(d.inFlight, spoken)
+	}
+	d.tokenMu.Unlock()
+
 	d.pendingFlush.Add(1)
 	if err := d.ws.writeJSON(ctx, ttsClientMessage{Type: "flush"}); err != nil {
 		d.pendingFlush.Add(-1)
@@ -338,12 +419,36 @@ func (d *SpeechDuplex) Flush(ctx context.Context) error {
 }
 
 func (d *SpeechDuplex) CloseSend(ctx context.Context) error {
+	if err := d.drainTokens(ctx); err != nil {
+		return err
+	}
 	d.sendClosed.Store(true)
 	return d.Flush(ctx)
 }
 
+func (d *SpeechDuplex) SpokenText() string {
+	d.spokenMu.Lock()
+	defer d.spokenMu.Unlock()
+	return d.spoken.String()
+}
+
+func (d *SpeechDuplex) confirmSpoken() {
+	d.tokenMu.Lock()
+	if len(d.inFlight) == 0 {
+		d.tokenMu.Unlock()
+		return
+	}
+	text := d.inFlight[0]
+	d.inFlight = d.inFlight[1:]
+	d.tokenMu.Unlock()
+
+	d.spokenMu.Lock()
+	d.spoken.WriteString(text)
+	d.spokenMu.Unlock()
+}
+
 func (d *SpeechDuplex) Next() bool {
-	if d.closed {
+	if d.closed || d.done {
 		return false
 	}
 	for {
@@ -377,6 +482,9 @@ func (d *SpeechDuplex) Next() bool {
 			if len(raw) == 0 {
 				continue
 			}
+			if d.index == 0 && d.onFirst != nil {
+				d.onFirst()
+			}
 			d.chunk = models.AudioChunk{Bytes: raw, Index: d.index}
 			d.index++
 			return true
@@ -388,7 +496,7 @@ func (d *SpeechDuplex) Next() bool {
 			}
 
 			if data.EventType == "final" && d.lastFinal() {
-				d.Close()
+				d.done = true
 				return false
 			}
 
@@ -457,5 +565,54 @@ func hasSpeakableText(s string) bool {
 }
 
 func (d *SpeechDuplex) lastFinal() bool {
+	d.confirmSpoken()
 	return d.pendingFlush.Add(-1) <= 0 && d.sendClosed.Load()
+}
+
+const defaultSentenceLimit = 160
+
+func sentenceCut(s string, limit int) int {
+	runes := []rune(s)
+	cut := -1
+
+	for i, r := range runes {
+		if !strings.ContainsRune(".!?।॥\n", r) {
+			continue
+		}
+		if r == '.' && i > 0 && i+1 < len(runes) && unicode.IsDigit(runes[i-1]) && unicode.IsDigit(runes[i+1]) {
+			continue
+		}
+		cut = i + 1
+	}
+	if cut > 0 {
+		return len(string(runes[:cut]))
+	}
+	if len(runes) < limit {
+		return 0
+	}
+
+	for i := len(runes) - 1; i > 0; i-- {
+		if strings.ContainsRune(",;:", runes[i]) {
+			return len(string(runes[:i+1]))
+		}
+	}
+	return len(s)
+}
+
+func (d *SpeechDuplex) Reset() {
+	d.sendClosed.Store(false)
+	d.pendingFlush.Store(0)
+	d.done = false
+	d.index = 0
+	d.err = nil
+
+	d.tokenMu.Lock()
+	d.tokens.Reset()
+	d.queued.Reset()
+	d.inFlight = nil
+	d.tokenMu.Unlock()
+
+	d.spokenMu.Lock()
+	d.spoken.Reset()
+	d.spokenMu.Unlock()
 }

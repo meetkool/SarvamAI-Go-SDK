@@ -15,6 +15,8 @@ type Stream[T any] struct {
 	current T
 	err     error
 	closed  bool
+	onFirst func()
+	first   bool
 }
 
 func newStream[T any](body io.ReadCloser) *Stream[T] {
@@ -41,6 +43,12 @@ func (s *Stream[T]) Next() bool {
 		return false
 	}
 	s.current = v
+	if !s.first {
+		s.first = true
+		if s.onFirst != nil {
+			s.onFirst()
+		}
+	}
 	return true
 }
 

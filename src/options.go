@@ -35,6 +35,7 @@ type config struct {
 	userAgent      string
 	httpClient     *http.Client
 	logger         *slog.Logger
+	metrics        func(Metric)
 }
 
 type Option func(*config)
@@ -106,4 +107,8 @@ func WithUserAgent(ua string) Option {
 
 func WithLogger(l *slog.Logger) Option {
 	return func(c *config) { c.logger = l }
+}
+
+func WithMetrics(fn func(Metric)) Option {
+	return func(c *config) { c.metrics = fn }
 }

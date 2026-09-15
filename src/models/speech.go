@@ -16,6 +16,7 @@ type SpeechRequest struct {
 
 	MinBufferSize  int
 	MaxChunkLength int
+	SentenceLimit  int
 }
 
 type AudioChunk struct {

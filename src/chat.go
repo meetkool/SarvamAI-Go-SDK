@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/meetkool/SarvamAI-Go-SDK/src/models"
 )
@@ -83,9 +84,14 @@ func (c *ChatService) Stream(ctx context.Context, req *models.ChatRequest) (*Str
 	if err != nil {
 		return nil, err
 	}
+	started := time.Now()
 	resp, err := c.client.openStream(ctx, chatPath, body)
 	if err != nil {
 		return nil, err
 	}
-	return newStream[models.ChatChunk](resp.Body), nil
+	stream := newStream[models.ChatChunk](resp.Body)
+	stream.onFirst = func() {
+		c.client.emit(Metric{Name: MetricFirstToken, Endpoint: chatPath, Duration: time.Since(started)})
+	}
+	return stream, nil
 }

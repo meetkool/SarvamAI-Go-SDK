@@ -37,6 +37,7 @@ type Client struct {
 	defaultFormat models.Format
 	slots         chan struct{}
 	log           *slog.Logger
+	metrics       func(Metric)
 }
 
 func New(opts ...Option) (*Client, error) {
@@ -82,6 +83,7 @@ func New(opts ...Option) (*Client, error) {
 		defaultFormat: cfg.defaultFormat,
 		slots:         make(chan struct{}, max(cfg.maxConcurrency, 1)),
 		log:           logger,
+		metrics:       cfg.metrics,
 	}
 	c.Speech = &SpeechService{client: c}
 	c.Transcription = &TranscriptionService{client: c}
@@ -109,7 +111,13 @@ func (c *Client) doJSON(ctx context.Context, method, path string, in, out any) e
 		return err
 	}
 
+	attempts := 0
 	return withRetry(ctx, c.retry, func() error {
+		if attempts > 0 {
+			c.emit(Metric{Name: MetricRetry, Endpoint: path, Attempt: attempts})
+		}
+		attempts++
+
 		attemptCtx, cancel := c.withTimeout(ctx)
 		defer cancel()
 
@@ -133,7 +141,13 @@ func (c *Client) doUpload(ctx context.Context, path string, fields []multipart.F
 		policy.maxRetries = 0
 	}
 
+	attempts := 0
 	return withRetry(ctx, policy, func() error {
+		if attempts > 0 {
+			c.emit(Metric{Name: MetricRetry, Endpoint: path, Attempt: attempts})
+		}
+		attempts++
+
 		file, err := in.Open()
 		if err != nil {
 			return err
@@ -183,14 +197,19 @@ func (c *Client) send(ctx context.Context, method, endpoint string, body io.Read
 		return nil, err
 	}
 
+	path := strings.TrimPrefix(endpoint, c.baseURL)
 	started := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
 		release()
-		return nil, transportError(err)
+		failed := transportError(err)
+		c.emit(Metric{Name: MetricRequest, Endpoint: path, Duration: time.Since(started), Err: failed})
+		return nil, failed
 	}
+
 	c.log.Debug("sarvam request",
 		"method", method, "url", endpoint, "status", resp.StatusCode, "took", time.Since(started))
+	c.emit(Metric{Name: MetricRequest, Endpoint: path, Duration: time.Since(started), Status: resp.StatusCode})
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		defer resp.Body.Close()

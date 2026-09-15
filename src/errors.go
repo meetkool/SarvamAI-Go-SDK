@@ -21,7 +21,7 @@ var (
 	ErrServer             = errors.New("sarvam: server error")
 	ErrTimeout            = errors.New("sarvam: request timed out")
 	ErrMaxRetriesExceeded = errors.New("sarvam: all retries failed")
-	ErrUnsupportedFormat  = errors.New("sarvam: unsupported audio format")
+	ErrUnsupportedFormat  = models.ErrUnsupportedFormat
 	ErrAudioTooLong       = errors.New("sarvam: audio is too long for this endpoint")
 	ErrDecode             = errors.New("sarvam: could not decode the response")
 	ErrStreamClosed       = errors.New("sarvam: stream is closed")
