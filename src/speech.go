@@ -306,11 +306,12 @@ type SpeechDuplex struct {
 	ctx    context.Context
 	format models.Format
 
-	chunk      models.AudioChunk
-	index      int
-	err        error
-	sendClosed atomic.Bool
-	closed     bool
+	chunk        models.AudioChunk
+	index        int
+	err          error
+	sendClosed   atomic.Bool
+	pendingFlush atomic.Int32
+	closed       bool
 }
 
 func (d *SpeechDuplex) Format() models.Format { return d.format }
@@ -328,7 +329,12 @@ func (d *SpeechDuplex) SendText(ctx context.Context, text string) error {
 }
 
 func (d *SpeechDuplex) Flush(ctx context.Context) error {
-	return d.ws.writeJSON(ctx, ttsClientMessage{Type: "flush"})
+	d.pendingFlush.Add(1)
+	if err := d.ws.writeJSON(ctx, ttsClientMessage{Type: "flush"}); err != nil {
+		d.pendingFlush.Add(-1)
+		return err
+	}
+	return nil
 }
 
 func (d *SpeechDuplex) CloseSend(ctx context.Context) error {
@@ -381,7 +387,7 @@ func (d *SpeechDuplex) Next() bool {
 				continue
 			}
 
-			if data.EventType == "final" && d.sendClosed.Load() {
+			if data.EventType == "final" && d.lastFinal() {
 				d.Close()
 				return false
 			}
@@ -448,4 +454,8 @@ func hasSpeakableText(s string) bool {
 		}
 	}
 	return false
+}
+
+func (d *SpeechDuplex) lastFinal() bool {
+	return d.pendingFlush.Add(-1) <= 0 && d.sendClosed.Load()
 }
