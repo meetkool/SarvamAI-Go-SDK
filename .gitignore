@@ -13,3 +13,10 @@ coverage.out
 .DS_Store
 .idea/
 .vscode/
+
+hello.wav
+stream.mp3
+duplex.mp3
+out.pcm
+*.srt
+*.vtt
