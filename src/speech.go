@@ -296,9 +296,9 @@ func (s *SpeechService) Duplex(ctx context.Context, req *models.SpeechRequest) (
 		return nil, err
 	}
 
-	d := &SpeechDuplex{ws: ws, ctx: ctx, format: format, limit: req.SentenceLimit}
+	d := &SpeechDuplex{ws: ws, ctx: ctx, format: format, limit: req.SentenceLimit, started: started}
 	d.onFirst = func() {
-		s.client.emit(Metric{Name: MetricFirstAudio, Endpoint: "/text-to-speech/ws", Duration: time.Since(started)})
+		s.client.emit(Metric{Name: MetricFirstAudio, Endpoint: "/text-to-speech/ws", Duration: time.Since(d.started)})
 	}
 	if req.Text != "" {
 		if err := d.SendText(ctx, req.Text); err != nil {
@@ -321,6 +321,7 @@ type SpeechDuplex struct {
 	pendingFlush atomic.Int32
 	limit        int
 	onFirst      func()
+	started      time.Time
 
 	tokenMu  sync.Mutex
 	tokens   strings.Builder
@@ -603,6 +604,7 @@ func (d *SpeechDuplex) Reset() {
 	d.sendClosed.Store(false)
 	d.pendingFlush.Store(0)
 	d.done = false
+	d.started = time.Now()
 	d.index = 0
 	d.err = nil
 
